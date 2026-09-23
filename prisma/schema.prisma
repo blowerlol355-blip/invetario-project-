@@ -1,0 +1,265 @@
+// Esquema de base de datos de StockPilot (Microsoft SQL Server 2022).
+//
+// Notas del conector sqlserver:
+// - No soporta `enum`: los campos role, type, status y action son VARCHAR con
+//   constraints CHECK definidos en la migración (ver prisma/migrations) y
+//   tipados en TypeScript en src/lib/domain.ts.
+// - No soporta `Json`: los snapshots de auditoría se guardan como NVARCHAR(MAX).
+// - Los índices únicos tratan NULL como valor: barcode y taxId son opcionales y
+//   su unicidad se valida en la capa de aplicación.
+// - Todas las relaciones usan NoAction: los catálogos se desactivan (isActive),
+//   nunca se borran físicamente.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlserver"
+}
+
+// ----------------------------- Usuarios -----------------------------
+
+/// Usuario del sistema. role: ADMIN | MANAGER | OPERATOR.
+model User {
+  id              String    @id @default(uuid())
+  name            String    @db.NVarChar(120)
+  email           String    @unique @db.NVarChar(255)
+  passwordHash    String    @map("password_hash") @db.VarChar(255)
+  role            String    @default("OPERATOR") @db.VarChar(20)
+  isActive        Boolean   @default(true) @map("is_active")
+  /// SHA-256 (hex) de la clave de API del usuario; la clave en claro solo se muestra al generarla.
+  apiKeyHash      String?   @map("api_key_hash") @db.VarChar(64)
+  apiKeyCreatedAt DateTime? @map("api_key_created_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  movements      StockMovement[]
+  purchaseOrders PurchaseOrder[]
+  auditLogs      AuditLog[]
+
+  @@index([role])
+  @@index([isActive])
+  @@index([apiKeyHash])
+  @@map("users")
+}
+
+// ----------------------------- Catálogos ----------------------------
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique @db.NVarChar(80)
+  description String?  @db.NVarChar(500)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  products Product[]
+
+  @@index([isActive])
+  @@map("categories")
+}
+
+model Supplier {
+  id          String   @id @default(uuid())
+  name        String   @db.NVarChar(150)
+  contactName String?  @map("contact_name") @db.NVarChar(120)
+  email       String?  @db.NVarChar(255)
+  phone       String?  @db.VarChar(30)
+  address     String?  @db.NVarChar(255)
+  /// Identificación fiscal (RUC, NIT, RFC, CUIT...). Unicidad validada en la aplicación.
+  taxId       String?  @map("tax_id") @db.VarChar(30)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  products       Product[]
+  purchaseOrders PurchaseOrder[]
+
+  @@index([name])
+  @@index([taxId])
+  @@index([isActive])
+  @@map("suppliers")
+}
+
+model Warehouse {
+  id        String   @id @default(uuid())
+  name      String   @db.NVarChar(100)
+  code      String   @unique @db.VarChar(10)
+  address   String?  @db.NVarChar(255)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  stocks         Stock[]
+  movementsFrom  StockMovement[] @relation("MovementsFrom")
+  movementsTo    StockMovement[] @relation("MovementsTo")
+  purchaseOrders PurchaseOrder[]
+
+  @@index([isActive])
+  @@map("warehouses")
+}
+
+// ----------------------------- Productos ----------------------------
+
+model Product {
+  id          String   @id @default(uuid())
+  sku         String   @unique @db.VarChar(40)
+  /// Código de barras (EAN/UPC). Unicidad validada en la aplicación.
+  barcode     String?  @db.VarChar(50)
+  name        String   @db.NVarChar(200)
+  description String?  @db.NVarChar(1000)
+  categoryId  String   @map("category_id")
+  supplierId  String?  @map("supplier_id")
+  /// Unidad de medida: unidad, par, caja, paquete, rollo, litro, kg...
+  unit        String   @default("unidad") @db.VarChar(20)
+  /// Costo de referencia (última compra o costo de catálogo).
+  costPrice   Decimal  @default(0) @map("cost_price") @db.Decimal(12, 2)
+  salePrice   Decimal  @default(0) @map("sale_price") @db.Decimal(12, 2)
+  /// Costo promedio ponderado, recalculado en cada entrada con costo.
+  avgCost     Decimal  @default(0) @map("avg_cost") @db.Decimal(12, 4)
+  minStock    Int      @default(0) @map("min_stock")
+  maxStock    Int?     @map("max_stock")
+  imageUrl    String?  @map("image_url") @db.VarChar(500)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  category           Category            @relation(fields: [categoryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  supplier           Supplier?           @relation(fields: [supplierId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  stocks             Stock[]
+  movements          StockMovement[]
+  purchaseOrderItems PurchaseOrderItem[]
+
+  @@index([name])
+  @@index([barcode])
+  @@index([categoryId])
+  @@index([supplierId])
+  @@index([isActive])
+  @@index([createdAt])
+  @@map("products")
+}
+
+/// Existencia actual de un producto en un almacén. Solo se modifica a través de StockMovement.
+model Stock {
+  productId   String   @map("product_id")
+  warehouseId String   @map("warehouse_id")
+  quantity    Int      @default(0)
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  product   Product   @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([productId, warehouseId])
+  @@index([warehouseId])
+  @@map("stocks")
+}
+
+// ----------------------------- Movimientos --------------------------
+
+/// Movimiento de inventario. type: IN | OUT | ADJUSTMENT | TRANSFER.
+///
+/// Convención de almacenes (quantity siempre > 0):
+/// - IN:         toWarehouseId (entra stock)
+/// - OUT:        fromWarehouseId (sale stock)
+/// - TRANSFER:   fromWarehouseId -> toWarehouseId
+/// - ADJUSTMENT: toWarehouseId si aumenta, fromWarehouseId si disminuye
+model StockMovement {
+  id              String   @id @default(uuid())
+  type            String   @db.VarChar(20)
+  productId       String   @map("product_id")
+  fromWarehouseId String?  @map("from_warehouse_id")
+  toWarehouseId   String?  @map("to_warehouse_id")
+  quantity        Int
+  /// Costo unitario de la entrada; alimenta el costo promedio ponderado.
+  unitCost        Decimal? @map("unit_cost") @db.Decimal(12, 4)
+  reason          String?  @db.NVarChar(255)
+  /// Documento de respaldo: factura, ticket, código de orden de compra...
+  reference       String?  @db.VarChar(60)
+  userId          String   @map("user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  product       Product    @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  fromWarehouse Warehouse? @relation("MovementsFrom", fields: [fromWarehouseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  toWarehouse   Warehouse? @relation("MovementsTo", fields: [toWarehouseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user          User       @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([createdAt])
+  @@index([productId, createdAt])
+  @@index([type])
+  @@index([userId])
+  @@index([fromWarehouseId])
+  @@index([toWarehouseId])
+  @@index([reference])
+  @@map("stock_movements")
+}
+
+// ----------------------------- Compras ------------------------------
+
+/// Orden de compra. status: DRAFT | SENT | PARTIALLY_RECEIVED | RECEIVED | CANCELLED.
+model PurchaseOrder {
+  id           String    @id @default(uuid())
+  code         String    @unique @db.VarChar(20)
+  supplierId   String    @map("supplier_id")
+  warehouseId  String    @map("warehouse_id")
+  status       String    @default("DRAFT") @db.VarChar(30)
+  expectedDate DateTime? @map("expected_date")
+  notes        String?   @db.NVarChar(1000)
+  createdById  String    @map("created_by_id")
+  sentAt       DateTime? @map("sent_at")
+  receivedAt   DateTime? @map("received_at")
+  cancelledAt  DateTime? @map("cancelled_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  supplier  Supplier            @relation(fields: [supplierId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouse Warehouse           @relation(fields: [warehouseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdBy User                @relation(fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items     PurchaseOrderItem[]
+
+  @@index([status])
+  @@index([supplierId])
+  @@index([warehouseId])
+  @@index([createdAt])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id               String  @id @default(uuid())
+  purchaseOrderId  String  @map("purchase_order_id")
+  productId        String  @map("product_id")
+  quantityOrdered  Int     @map("quantity_ordered")
+  quantityReceived Int     @default(0) @map("quantity_received")
+  unitCost         Decimal @map("unit_cost") @db.Decimal(12, 4)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  product       Product       @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([purchaseOrderId, productId])
+  @@index([productId])
+  @@map("purchase_order_items")
+}
+
+// ----------------------------- Auditoría ----------------------------
+
+/// Bitácora de cambios. action: CREATE | UPDATE | DELETE | STATUS_CHANGE.
+/// before/after guardan snapshots JSON serializados (SQL Server no soporta Json en Prisma).
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id")
+  action    String   @db.VarChar(20)
+  entity    String   @db.VarChar(50)
+  entityId  String   @map("entity_id") @db.VarChar(64)
+  before    String?  @db.NVarChar(Max)
+  after     String?  @db.NVarChar(Max)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([createdAt])
+  @@index([entity, entityId])
+  @@index([userId])
+  @@index([action])
+  @@map("audit_logs")
+}
