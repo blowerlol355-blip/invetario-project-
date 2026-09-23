@@ -84,10 +84,11 @@ migraciones futuras se aplican solas al hacer push. El seed se ejecuta una sola 
 
 ## 5. Solución de problemas
 
-| Síntoma                                                      | Causa probable y solución                                                                   |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| Build falla en `prisma migrate deploy` con error de conexión | Regla de firewall ausente en Azure o `DATABASE_URL` incorrecta en Vercel.                   |
-| `Login failed for user`                                      | Usuario o contraseña con caracteres especiales sin llaves `{}` en la cadena.                |
-| Primera carga muy lenta o error 500 tras horas sin uso       | Auto-pause de Azure SQL: reintenta; o desactiva el auto-pause en Compute + storage.         |
-| El PDF devuelve 500 en Vercel pero funciona en local         | Verifica que `outputFileTracingIncludes` siga apuntando a `node_modules/pdfkit/js/data/**`. |
-| Fechas del dashboard desplazadas un día                      | Falta la variable `TZ` en Vercel.                                                           |
+| Síntoma                                                                     | Causa probable y solución                                                                                                                                         |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm install` falla con `Cannot resolve environment variable: DATABASE_URL` | Versión anterior de `prisma.config.ts`; desde 1.0.1 `prisma generate` no exige la variable. Aun así, `DATABASE_URL` debe existir en Vercel para `migrate deploy`. |
+| Build falla en `prisma migrate deploy` con error de conexión                | Regla de firewall ausente en Azure o `DATABASE_URL` incorrecta en Vercel.                                                                                         |
+| `Login failed for user`                                                     | Usuario o contraseña con caracteres especiales sin llaves `{}` en la cadena.                                                                                      |
+| Primera carga muy lenta o error 500 tras horas sin uso                      | Auto-pause de Azure SQL: reintenta; o desactiva el auto-pause en Compute + storage.                                                                               |
+| El PDF devuelve 500 en Vercel pero funciona en local                        | Verifica que `outputFileTracingIncludes` siga apuntando a `node_modules/pdfkit/js/data/**`.                                                                       |
+| Fechas del dashboard desplazadas un día                                     | Falta la variable `TZ` en Vercel.                                                                                                                                 |

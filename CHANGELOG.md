@@ -11,6 +11,10 @@ adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 - Preparación para despliegue en Vercel con Azure SQL Database: `vercel.json` (build con migraciones, región), trazado de las fuentes de PDFKit para las funciones serverless y guía `docs/DEPLOY.md`.
 
+### Fixed
+
+- `prisma generate` (postinstall) ya no falla cuando `DATABASE_URL` no está definida: `prisma.config.ts` usa un marcador y solo las migraciones y el seed exigen la variable real.
+
 ## [1.0.0] - 2026-09-23
 
 Primera versión completa: los diez módulos del proyecto, la API REST y la documentación final.
