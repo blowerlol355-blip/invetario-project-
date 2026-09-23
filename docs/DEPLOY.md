@@ -9,7 +9,7 @@ apunta a Supabase: no hace falta instalar ninguna base de datos en el equipo.
 
 1. En [supabase.com/dashboard](https://supabase.com/dashboard) crea un proyecto nuevo:
    nombre `stockpilot`, una **contraseña de base de datos** fuerte (guárdala: es la del usuario
-   `postgres`) y región **East US (North Virginia)**, la más cercana a la región `iad1` de Vercel
+   `postgres`) y región **West US (Oregon)**, la más cercana a la región `pdx1` de Vercel
    fijada en `vercel.json`.
 2. Cuando el proyecto esté listo, pulsa **Connect** (arriba) y copia las dos cadenas de la
    pestaña _ORMs → Prisma_ (o de _Connection string_):

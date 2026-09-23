@@ -336,7 +336,7 @@ Reglas transversales:
 
 - Producción en Vercel (import del repo de GitHub, despliegue automático en cada push a `main`) con
   PostgreSQL en Supabase (ADR 0004). `vercel.json` fija
-  `buildCommand: npm run db:deploy && npm run build` y la región `iad1` (East US de Supabase).
+  `buildCommand: npm run db:deploy && npm run build` y la región `pdx1` (us-west-2 de Supabase).
 - Variables en Vercel: `DATABASE_URL` (transaction pooler 6543), `DIRECT_URL` (session pooler
   5432, para `migrate deploy`), `AUTH_SECRET`, `TZ=America/Caracas` (zona horaria del negocio; los
   cortes de fecha, incluidos los del SQL del dashboard, usan la zona del proceso). `AUTH_URL` no

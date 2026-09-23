@@ -717,6 +717,8 @@ async function main(): Promise<void> {
   await insertInChunks(stockRows, (chunk) => prisma.stock.createMany({ data: chunk }));
   console.log(`Registros de stock: ${stockRows.length}`);
 
+  // 150 updates en una transacción: con una base remota (Supabase) superan el límite
+  // por defecto de 5 s, así que se amplía el tiempo máximo.
   await prisma.$transaction(
     products.map((product) =>
       prisma.product.update({
@@ -724,6 +726,7 @@ async function main(): Promise<void> {
         data: { avgCost: averageCost.get(product.id) ?? 0 },
       }),
     ),
+    { timeout: 120_000, maxWait: 15_000 },
   );
 
   await insertInChunks(purchaseOrders, (chunk) => prisma.purchaseOrder.createMany({ data: chunk }));
