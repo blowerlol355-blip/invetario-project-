@@ -108,6 +108,7 @@ Abre [http://localhost:3000](http://localhost:3000).
 | `DIRECT_URL`          | Conexión sin pooler para migraciones (Vercel)  | `postgresql://...pooler.supabase.com:5432/postgres` |
 | `AUTH_SECRET`         | Secreto para firmar JWT (mínimo 32 caracteres) | `openssl rand -base64 32`                           |
 | `AUTH_URL`            | URL pública de la app (opcional en desarrollo) | `http://localhost:3000`                             |
+| `APP_TIMEZONE`        | Zona horaria del negocio (IANA)                | `America/Caracas`                                   |
 | `SKIP_ENV_VALIDATION` | Omite la validación de entorno (útil en CI)    | `true`                                              |
 
 Todas se validan con Zod al arrancar; si falta alguna, la app no inicia y muestra qué corregir.
@@ -183,7 +184,7 @@ Si prefieres no descargar Chromium, usa el navegador instalado:
 La app se despliega en **Vercel** y la base de datos en **Supabase** (PostgreSQL gestionado, plan
 gratuito). `vercel.json` fija el comando de build, que aplica las migraciones antes de compilar.
 Variables necesarias en Vercel: `DATABASE_URL` (pooler de transacciones), `DIRECT_URL` (pooler de
-sesión), `AUTH_SECRET` y `TZ`. Guía completa en [docs/DEPLOY.md](docs/DEPLOY.md).
+sesión), `AUTH_SECRET` y `APP_TIMEZONE`. Guía completa en [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## ⚙️ Integración continua
 

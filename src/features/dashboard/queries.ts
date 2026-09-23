@@ -48,12 +48,17 @@ export interface DashboardData {
 const SERIES_DAYS = 30;
 
 /**
- * Zona horaria del proceso (TZ en Vercel, la del sistema en local). Los cortes de
+ * Zona horaria del negocio (APP_TIMEZONE en Vercel, TZ o la del sistema en local). Los cortes de
  * día en SQL usan la misma zona que date-fns en `fillDailySeries`, de modo que un
  * movimiento de las 21:00 locales cae en el día local y no en el día UTC.
  */
 function serverTimeZone(): string {
-  return process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  return (
+    process.env.APP_TIMEZONE ||
+    process.env.TZ ||
+    Intl.DateTimeFormat().resolvedOptions().timeZone ||
+    "UTC"
+  );
 }
 
 export async function getDashboardData(now: Date = new Date()): Promise<DashboardData> {

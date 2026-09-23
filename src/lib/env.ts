@@ -19,6 +19,11 @@ export const envSchema = z.object({
     .startsWith("postgres", "DIRECT_URL debe usar el protocolo postgresql://")
     .optional(),
   AUTH_SECRET: z.string().min(32, "AUTH_SECRET debe tener al menos 32 caracteres"),
+  /**
+   * Zona horaria del negocio (IANA, p. ej. America/Caracas). Vercel reserva `TZ`, así que
+   * se aplica al proceso desde `src/instrumentation.ts` y aquí como respaldo.
+   */
+  APP_TIMEZONE: z.string().trim().min(1).optional(),
   AUTH_URL: z.url("AUTH_URL debe ser una URL válida").optional(),
 });
 
@@ -50,3 +55,7 @@ const skipValidation = process.env.SKIP_ENV_VALIDATION === "true";
 export const env: Env = skipValidation
   ? (process.env as unknown as Env)
   : parseEnv(process.env as Record<string, string | undefined>);
+
+if (env.APP_TIMEZONE && process.env.TZ !== env.APP_TIMEZONE) {
+  process.env.TZ = env.APP_TIMEZONE;
+}

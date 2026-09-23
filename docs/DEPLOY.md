@@ -55,10 +55,12 @@ migraciones futuras se aplican solas al hacer push. El seed se ejecuta una sola 
    | `DATABASE_URL` | Cadena del **transaction pooler** (puerto 6543) |
    | `DIRECT_URL`   | Cadena del **session pooler** (puerto 5432)     |
    | `AUTH_SECRET`  | Un secreto aleatorio: `openssl rand -base64 32` |
-   | `TZ`           | `America/Caracas` (zona horaria del negocio)    |
+   | `APP_TIMEZONE` | `America/Caracas` (zona horaria del negocio)    |
 
-   `AUTH_URL` no es necesaria: Auth.js usa la URL del despliegue (`trustHost`). Pega los valores
-   sin comillas y sin espacios al final; una variable vacía hace fallar el build.
+   `AUTH_URL` no es necesaria: Auth.js usa la URL del despliegue (`trustHost`). Vercel reserva el
+   nombre `TZ`, por eso la zona horaria se llama `APP_TIMEZONE` (`src/instrumentation.ts` la aplica
+   al proceso). Pega los valores sin comillas y sin espacios al final; una variable vacía hace
+   fallar el build. Si una variable ya existe, edítala con el lápiz en lugar de crearla de nuevo.
 
 3. Pulsa **Deploy** (o **Redeploy** si el proyecto ya existía: los cambios de variables no se
    aplican a un despliegue en curso). El build ejecuta `prisma generate` (postinstall),
@@ -74,7 +76,7 @@ migraciones futuras se aplican solas al hacer push. El seed se ejecuta una sola 
   límite es por instancia, no global. Suficiente para una demo; para producción real, respaldarlo
   en un almacén compartido (Redis) usando la misma interfaz de `src/lib/rate-limit.ts`.
 - **Zona horaria**: los cortes de día (dashboard, kardex, movimientos por fecha) usan la zona del
-  proceso (`TZ`), también dentro de las consultas SQL del dashboard, así que un movimiento de las
+  proceso (`APP_TIMEZONE`), también dentro de las consultas SQL del dashboard, así que un movimiento de las
   21:00 en Caracas cuenta en el día local.
 - **Arranque en frío**: la primera petición tras inactividad tarda unos segundos. Los proyectos
   gratuitos de Supabase se **pausan tras 7 días sin actividad**; se reanudan desde el panel en un
@@ -95,4 +97,4 @@ migraciones futuras se aplican solas al hacer push. El seed se ejecuta una sola 
 | `prepared statement "sX" already exists`                    | Migraciones lanzadas contra el puerto 6543. `DIRECT_URL` debe ser el session pooler (5432).       |
 | Primera carga muy lenta o error 500 tras días sin uso       | Proyecto de Supabase pausado: reanúdalo desde el panel.                                           |
 | El PDF devuelve 500 en Vercel pero funciona en local        | Verifica que `outputFileTracingIncludes` siga apuntando a `node_modules/pdfkit/js/data/**`.       |
-| Fechas del dashboard desplazadas un día                     | Falta la variable `TZ` en Vercel.                                                                 |
+| Fechas del dashboard desplazadas un día                     | Falta la variable `APP_TIMEZONE` en Vercel.                                                       |

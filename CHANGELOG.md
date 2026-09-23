@@ -14,6 +14,10 @@ adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 - CI: el job E2E usa el PostgreSQL preinstalado en el runner de Ubuntu (servicio nativo, sin contenedores).
 - Despliegue en Vercel con Supabase: `vercel.json` (build con migraciones, región `iad1`), variables `DATABASE_URL`/`DIRECT_URL`, trazado de las fuentes de PDFKit para las funciones serverless y guía `docs/DEPLOY.md`.
 
+### Fixed
+
+- La zona horaria del negocio se configura con `APP_TIMEZONE` (Vercel reserva el nombre `TZ`) y se aplica al proceso en `src/instrumentation.ts`.
+
 ### Removed
 
 - Script `db:create` (`scripts/create-database.ts`) y dependencias `mssql`/`@prisma/adapter-mssql`.
