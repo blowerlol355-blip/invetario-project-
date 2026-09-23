@@ -1,42 +1,38 @@
-# Despliegue en Vercel con Azure SQL Database
+# Despliegue en Vercel con Supabase (PostgreSQL)
 
-La aplicación se despliega en **Vercel** (Next.js) y la base de datos en **Azure SQL Database**,
-que es SQL Server gestionado: el esquema, las migraciones y el código funcionan sin cambios.
-Vercel despliega automáticamente cada push a `main` y crea un entorno de vista previa por
-cada pull request.
+La aplicación se despliega en **Vercel** (Next.js) y la base de datos en **Supabase**
+(PostgreSQL gestionado, plan gratuito sin tarjeta). Vercel despliega automáticamente cada push a
+`main` y crea un entorno de vista previa por cada pull request. El desarrollo local también
+apunta a Supabase: no hace falta instalar ninguna base de datos en el equipo.
 
-## 1. Base de datos en Azure
+## 1. Proyecto en Supabase
 
-1. En [portal.azure.com](https://portal.azure.com) crea un recurso **SQL Database**. Si tu
-   suscripción lo permite, elige la **oferta gratuita** (General Purpose serverless, 32 GB,
-   100 000 vCore-segundos al mes).
-2. Servidor nuevo: nombre `stockpilot-sql` (el host será `stockpilot-sql.database.windows.net`),
-   región **East US** (la más cercana a la región `iad1` de Vercel configurada en `vercel.json`),
-   autenticación **SQL** con un usuario administrador y una contraseña fuerte.
-3. Base de datos: `stockpilot`. Intercalación por defecto (`SQL_Latin1_General_CP1_CI_AS`).
-4. En **Networking** del servidor:
-   - Activa **Allow Azure services and resources to access this server**.
-   - Añade una regla con tu IP actual (para migrar y sembrar desde tu equipo).
-   - Vercel no tiene IPs fijas en el plan gratuito: añade una regla `0.0.0.0` – `255.255.255.255`
-     (nombre `vercel`). La protección real es la contraseña y TLS obligatorio; si más adelante
-     usas un plan con IPs dedicadas de Vercel, sustituye la regla por esas IPs.
-5. Si elegiste la oferta gratuita, en **Compute + storage** revisa el comportamiento al agotar
-   el crédito mensual (pausar o seguir cobrando) y el **auto-pause**: la primera petición tras una
-   pausa puede tardar hasta un minuto.
+1. En [supabase.com/dashboard](https://supabase.com/dashboard) crea un proyecto nuevo:
+   nombre `stockpilot`, una **contraseña de base de datos** fuerte (guárdala: es la del usuario
+   `postgres`) y región **East US (North Virginia)**, la más cercana a la región `iad1` de Vercel
+   fijada en `vercel.json`.
+2. Cuando el proyecto esté listo, pulsa **Connect** (arriba) y copia las dos cadenas de la
+   pestaña _ORMs → Prisma_ (o de _Connection string_):
 
-Cadena de conexión (formato de Prisma):
+   | Cadena                 | Puerto | Uso                                                                |
+   | ---------------------- | ------ | ------------------------------------------------------------------ |
+   | **Transaction pooler** | 6543   | `DATABASE_URL` en Vercel (serverless, muchas conexiones cortas)    |
+   | **Session pooler**     | 5432   | `DIRECT_URL` en Vercel (migraciones) y `DATABASE_URL` en tu equipo |
 
-```
-sqlserver://stockpilot-sql.database.windows.net:1433;database=stockpilot;user=USUARIO;password=CONTRASEÑA;encrypt=true
-```
+   Ambas tienen la forma
+   `postgresql://postgres.REF:CONTRASEÑA@aws-0-REGION.pooler.supabase.com:PUERTO/postgres`.
+   No uses la _Direct connection_ (`db.REF.supabase.co`): solo acepta IPv6.
 
-En Azure el certificado es válido: **no** añadas `trustServerCertificate=true`. Si la contraseña
-contiene `;` o `=`, enciérrala entre llaves: `password={mi;clave}`.
+3. Si la contraseña contiene caracteres como `@`, `#`, `/` o `%`, codifícala en la URL
+   (`@` → `%40`, `#` → `%23`, `/` → `%2F`, `%` → `%25`).
+
+Supabase no necesita reglas de firewall: el acceso se controla con la contraseña y TLS.
 
 ## 2. Migraciones y datos iniciales (desde tu equipo)
 
+En `.env` pon la cadena del **session pooler** como `DATABASE_URL` y ejecuta:
+
 ```powershell
-$env:DATABASE_URL = "sqlserver://stockpilot-sql.database.windows.net:1433;database=stockpilot;user=USUARIO;password=CONTRASEÑA;encrypt=true"
 npm run db:deploy   # aplica las migraciones de prisma/migrations
 npm run db:seed     # usuarios demo, catálogos, productos y movimientos
 ```
@@ -52,31 +48,37 @@ migraciones futuras se aplican solas al hacer push. El seed se ejecuta una sola 
 1. En [vercel.com/new](https://vercel.com/new) importa el repositorio
    `blowerlol355-blip/invetario-project-`. Vercel detecta Next.js; deja el directorio raíz por
    defecto. `vercel.json` ya fija el comando de build y la región.
-2. En **Environment Variables** añade (para Production y Preview):
+2. En **Settings → Environment Variables** añade, marcadas para **Production** y **Preview**:
 
    | Variable       | Valor                                           |
    | -------------- | ----------------------------------------------- |
-   | `DATABASE_URL` | La cadena de conexión de Azure del paso 1       |
+   | `DATABASE_URL` | Cadena del **transaction pooler** (puerto 6543) |
+   | `DIRECT_URL`   | Cadena del **session pooler** (puerto 5432)     |
    | `AUTH_SECRET`  | Un secreto aleatorio: `openssl rand -base64 32` |
    | `TZ`           | `America/Caracas` (zona horaria del negocio)    |
 
-   `AUTH_URL` no es necesaria: Auth.js usa la URL del despliegue (`trustHost`).
+   `AUTH_URL` no es necesaria: Auth.js usa la URL del despliegue (`trustHost`). Pega los valores
+   sin comillas y sin espacios al final; una variable vacía hace fallar el build.
 
-3. Pulsa **Deploy**. El build ejecuta `prisma generate` (postinstall), `prisma migrate deploy` y
-   `next build`. Al terminar, abre la URL, entra con `admin@stockpilot.dev` y revisa el
-   dashboard, un PDF de reportes y `/api-docs`.
+3. Pulsa **Deploy** (o **Redeploy** si el proyecto ya existía: los cambios de variables no se
+   aplican a un despliegue en curso). El build ejecuta `prisma generate` (postinstall),
+   `prisma migrate deploy` (usa `DIRECT_URL`) y `next build`. Al terminar, abre la URL, entra con
+   `admin@stockpilot.dev` y revisa el dashboard, un PDF de reportes y `/api-docs`.
 
 ## 4. Qué tener en cuenta en serverless
 
+- **Conexiones**: cada instancia de función abre su propio pool (`max: 3` en producción, ver
+  `src/lib/db.ts`). Por eso `DATABASE_URL` apunta al pooler de transacciones de Supabase, que
+  multiplexa cientos de conexiones cortas sobre pocas conexiones reales.
 - **Rate limiting en memoria**: cada instancia de función lleva su propio contador; en Vercel el
   límite es por instancia, no global. Suficiente para una demo; para producción real, respaldarlo
   en un almacén compartido (Redis) usando la misma interfaz de `src/lib/rate-limit.ts`.
-- **Zona horaria**: los cortes de día (dashboard, kardex, movimientos por fecha) usan la hora del
-  servidor; por eso se fija `TZ`. La agrupación diaria del dashboard se hace en SQL sobre la
-  fecha UTC almacenada, de modo que un movimiento registrado después de las 20:00 (UTC-4) cae en
-  el día siguiente de la gráfica.
-- **Arranque en frío**: la primera petición tras inactividad tarda unos segundos (función +
-  conexión a Azure SQL). Si la base está en auto-pause, puede ser más.
+- **Zona horaria**: los cortes de día (dashboard, kardex, movimientos por fecha) usan la zona del
+  proceso (`TZ`), también dentro de las consultas SQL del dashboard, así que un movimiento de las
+  21:00 en Caracas cuenta en el día local.
+- **Arranque en frío**: la primera petición tras inactividad tarda unos segundos. Los proyectos
+  gratuitos de Supabase se **pausan tras 7 días sin actividad**; se reanudan desde el panel en un
+  minuto.
 - **PDF**: pdfmake se ejecuta sin empaquetar (`serverExternalPackages`) y las métricas de las
   fuentes estándar se incluyen en la función con `outputFileTracingIncludes`.
 - **CSP**: la política estricta ya incluye los orígenes de Scalar (`/api-docs`). No hace falta
@@ -84,11 +86,13 @@ migraciones futuras se aplican solas al hacer push. El seed se ejecuta una sola 
 
 ## 5. Solución de problemas
 
-| Síntoma                                                                     | Causa probable y solución                                                                                                                                         |
-| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm install` falla con `Cannot resolve environment variable: DATABASE_URL` | Versión anterior de `prisma.config.ts`; desde 1.0.1 `prisma generate` no exige la variable. Aun así, `DATABASE_URL` debe existir en Vercel para `migrate deploy`. |
-| Build falla en `prisma migrate deploy` con error de conexión                | Regla de firewall ausente en Azure o `DATABASE_URL` incorrecta en Vercel.                                                                                         |
-| `Login failed for user`                                                     | Usuario o contraseña con caracteres especiales sin llaves `{}` en la cadena.                                                                                      |
-| Primera carga muy lenta o error 500 tras horas sin uso                      | Auto-pause de Azure SQL: reintenta; o desactiva el auto-pause en Compute + storage.                                                                               |
-| El PDF devuelve 500 en Vercel pero funciona en local                        | Verifica que `outputFileTracingIncludes` siga apuntando a `node_modules/pdfkit/js/data/**`.                                                                       |
-| Fechas del dashboard desplazadas un día                                     | Falta la variable `TZ` en Vercel.                                                                                                                                 |
+| Síntoma                                                     | Causa probable y solución                                                                         |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `Can't reach database server at localhost:5432` en el build | `DATABASE_URL`/`DIRECT_URL` no existen para el entorno Production en Vercel (se usó el marcador). |
+| `Connection url is empty`                                   | La variable existe pero está vacía. Vuelve a pegar el valor y haz Redeploy.                       |
+| `password authentication failed for user "postgres.REF"`    | Contraseña incorrecta o con caracteres sin codificar en la URL.                                   |
+| `ENETUNREACH` al conectar                                   | Se usó la _Direct connection_ (solo IPv6). Usa el session pooler.                                 |
+| `prepared statement "sX" already exists`                    | Migraciones lanzadas contra el puerto 6543. `DIRECT_URL` debe ser el session pooler (5432).       |
+| Primera carga muy lenta o error 500 tras días sin uso       | Proyecto de Supabase pausado: reanúdalo desde el panel.                                           |
+| El PDF devuelve 500 en Vercel pero funciona en local        | Verifica que `outputFileTracingIncludes` siga apuntando a `node_modules/pdfkit/js/data/**`.       |
+| Fechas del dashboard desplazadas un día                     | Falta la variable `TZ` en Vercel.                                                                 |

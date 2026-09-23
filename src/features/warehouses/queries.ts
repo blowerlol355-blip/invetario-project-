@@ -33,9 +33,9 @@ export async function listWarehouses(params: ListParams): Promise<Paginated<Ware
     ...(params.q
       ? {
           OR: [
-            { code: { contains: params.q } },
-            { name: { contains: params.q } },
-            { address: { contains: params.q } },
+            { code: { contains: params.q, mode: "insensitive" } },
+            { name: { contains: params.q, mode: "insensitive" } },
+            { address: { contains: params.q, mode: "insensitive" } },
           ],
         }
       : {}),

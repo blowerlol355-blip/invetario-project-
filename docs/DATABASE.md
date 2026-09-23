@@ -1,6 +1,6 @@
 # Base de datos
 
-StockPilot usa **Microsoft SQL Server 2022** con **Prisma 7** (`provider = "sqlserver"`). El esquema
+StockPilot usa **PostgreSQL** (Supabase) con **Prisma 7** (`provider = "postgresql"`). El esquema
 vive en `prisma/schema.prisma` y las migraciones versionadas en `prisma/migrations/`.
 
 ## Diagrama entidad-relación
@@ -124,26 +124,31 @@ erDiagram
 ## Convenciones
 
 - **Nombres:** modelos en PascalCase singular en Prisma; tablas en snake_case plural y columnas en
-  snake_case en SQL Server (vía `@map`). El código TypeScript siempre usa camelCase.
+  snake_case en PostgreSQL (vía `@map`). El código TypeScript siempre usa camelCase.
 - **Claves primarias:** UUID v4 generado por Prisma (`@default(uuid())`), salvo `stocks`, que usa
   la clave compuesta `(product_id, warehouse_id)`.
 - **Montos:** `DECIMAL(12,2)` para precios y `DECIMAL(12,4)` para costos unitarios y promedio, para
   no perder precisión al promediar.
 - **Cantidades:** enteros. Las unidades fraccionables (litros, kg) se modelan como envases
   contables (p. ej. "Detergente 5 L").
-- **Timestamps:** `created_at` y `updated_at` en todas las tablas de negocio (`DATETIME2`).
+- **Timestamps:** `created_at` y `updated_at` en todas las tablas de negocio (`TIMESTAMP(3)`,
+  siempre en UTC; la zona horaria del negocio se aplica al presentar y al agrupar por día).
 - **Soft delete:** los catálogos (`users`, `categories`, `suppliers`, `warehouses`, `products`)
-  se desactivan con `is_active = 0`; nunca se borran físicamente. Por eso todas las claves
+  se desactivan con `is_active = false`; nunca se borran físicamente. Por eso todas las claves
   foráneas usan `ON DELETE NO ACTION`.
 
-## Limitaciones del conector SQL Server y cómo se resuelven
+## Decisiones del esquema
 
-| Limitación de Prisma en SQL Server       | Solución adoptada                                                                       |
-| ---------------------------------------- | --------------------------------------------------------------------------------------- |
-| No soporta `enum`                        | Columnas `VARCHAR` + constraints `CHECK` en la migración + tipos en `src/lib/domain.ts` |
-| No soporta `Json`                        | `NVARCHAR(MAX)` con JSON serializado (`audit_logs.before/after`)                        |
-| Índices únicos tratan `NULL` como valor  | `barcode` y `tax_id` son opcionales: su unicidad se valida en la aplicación             |
-| `ON DELETE SET NULL` con rutas múltiples | Todas las relaciones usan `NO ACTION` (compatible con el soft delete)                   |
+| Decisión                              | Motivo                                                                                                                   |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Sin `enum` de Prisma                  | Columnas `VARCHAR` + constraints `CHECK` en la migración + tipos en `src/lib/domain.ts`, única fuente de valores válidos |
+| Sin `Json`                            | `TEXT` con JSON serializado (`audit_logs.before/after`) para calcular el diff en la aplicación                           |
+| `barcode` y `tax_id` sin índice único | Opcionales: su unicidad se valida en la aplicación con un mensaje de campo claro                                         |
+| `ON DELETE NO ACTION` en todas las FK | Compatible con el soft delete: nada se borra físicamente                                                                 |
+
+El esquema nació en SQL Server 2022 y se migró a PostgreSQL al desplegar (ver
+[ADR 0004](adr/0004-migracion-a-postgresql-y-supabase.md)); por eso conserva `VARCHAR` con
+`CHECK` y JSON como texto en lugar de `enum` y `jsonb`.
 
 ## Tablas
 
@@ -152,8 +157,7 @@ erDiagram
 Usuarios que inician sesión. `role` define los permisos (ver `docs/BUSINESS_RULES.md`).
 `password_hash` guarda el hash bcrypt; nunca se expone al cliente. `api_key_hash` es el SHA-256
 de la clave de API del usuario (nullable, con índice para la búsqueda en cada petición de
-`/api/v1`) y `api_key_created_at` cuándo se generó; la clave en claro nunca se almacena. Migración
-`20260923093313_add_user_api_key`.
+`/api/v1`) y `api_key_created_at` cuándo se generó; la clave en claro nunca se almacena.
 
 ### categories
 

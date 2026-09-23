@@ -27,7 +27,12 @@ export async function listCategories(params: ListParams): Promise<Paginated<Cate
   const where: Prisma.CategoryWhereInput = {
     ...statusWhere(params.status),
     ...(params.q
-      ? { OR: [{ name: { contains: params.q } }, { description: { contains: params.q } }] }
+      ? {
+          OR: [
+            { name: { contains: params.q, mode: "insensitive" } },
+            { description: { contains: params.q, mode: "insensitive" } },
+          ],
+        }
       : {}),
   };
   const orderBy: Prisma.CategoryOrderByWithRelationInput =

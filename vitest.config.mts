@@ -19,8 +19,7 @@ export default defineConfig({
     // Variables mínimas para que src/lib/env.ts valide en tests unitarios (sin BD real).
     env: {
       NODE_ENV: "test",
-      DATABASE_URL:
-        "sqlserver://localhost:1433;database=stockpilot_test;user=sa;password=Test_1234!;encrypt=true;trustServerCertificate=true",
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/stockpilot_test",
       AUTH_SECRET: "secreto-de-pruebas-unitarias-con-mas-de-32-caracteres",
     },
     include: ["tests/unit/**/*.test.{ts,tsx}", "src/**/*.test.{ts,tsx}"],

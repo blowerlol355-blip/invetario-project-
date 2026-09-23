@@ -9,7 +9,7 @@ Control de stock en tiempo real, órdenes de compra, alertas de stock bajo y rep
 [![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![SQL Server](https://img.shields.io/badge/SQL%20Server-2022-CC2927?logo=microsoftsqlserver&logoColor=white)](https://www.microsoft.com/sql-server)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-4169E1?logo=postgresql&logoColor=white)](https://supabase.com)
 [![Prisma](https://img.shields.io/badge/Prisma-7-2D3748?logo=prisma&logoColor=white)](https://www.prisma.io/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![License: MIT](https://img.shields.io/badge/Licencia-MIT-yellow.svg)](LICENSE)
@@ -54,24 +54,24 @@ Las capturas se regeneran con `npm run screenshots` (Playwright, tras `npm run b
 
 ## 🛠️ Stack tecnológico
 
-| Capa          | Tecnología                                               |
-| ------------- | -------------------------------------------------------- |
-| Framework     | Next.js 15 (App Router), React 19, TypeScript estricto   |
-| Base de datos | Microsoft SQL Server 2022 (instancia local o remota)     |
-| ORM           | Prisma 7 con driver adapter para SQL Server              |
-| Autenticación | Auth.js v5 (credenciales, bcrypt, sesiones JWT)          |
-| UI            | Tailwind CSS v4, shadcn/ui, lucide-react, motion         |
-| Formularios   | React Hook Form + Zod                                    |
-| Tablas        | TanStack Table (paginación, orden y filtros en servidor) |
-| Gráficas      | Recharts                                                 |
-| Testing       | Vitest + Testing Library, Playwright                     |
-| Calidad       | ESLint, Prettier, Husky, lint-staged, commitlint         |
-| CI            | GitHub Actions                                           |
+| Capa          | Tecnología                                                     |
+| ------------- | -------------------------------------------------------------- |
+| Framework     | Next.js 15 (App Router), React 19, TypeScript estricto         |
+| Base de datos | PostgreSQL en Supabase (misma base en desarrollo y producción) |
+| ORM           | Prisma 7 con driver adapter `@prisma/adapter-pg`               |
+| Autenticación | Auth.js v5 (credenciales, bcrypt, sesiones JWT)                |
+| UI            | Tailwind CSS v4, shadcn/ui, lucide-react, motion               |
+| Formularios   | React Hook Form + Zod                                          |
+| Tablas        | TanStack Table (paginación, orden y filtros en servidor)       |
+| Gráficas      | Recharts                                                       |
+| Testing       | Vitest + Testing Library, Playwright                           |
+| Calidad       | ESLint, Prettier, Husky, lint-staged, commitlint               |
+| CI            | GitHub Actions                                                 |
 
 ## 📋 Requisitos
 
 - [Node.js](https://nodejs.org/) 20.19 o superior (recomendado 24, ver `.nvmrc`)
-- [SQL Server 2022](https://www.microsoft.com/sql-server/sql-server-downloads) Developer o Express instalado localmente, con autenticación SQL (usuario `sa`) y TCP habilitado en el puerto 1433
+- Un proyecto en [Supabase](https://supabase.com) (plan gratuito) o cualquier PostgreSQL 15+ accesible; no hace falta instalar nada en el equipo
 - npm 10 o superior
 
 ## 🚀 Instalación
@@ -86,16 +86,14 @@ npm install
 
 # 3. Configurar variables de entorno
 cp .env.example .env
-# Edita .env y cambia AUTH_SECRET por un valor aleatorio:  npx auth secret
+# Pega en DATABASE_URL la cadena "Session pooler" de tu proyecto de Supabase (docs/DEPLOY.md)
+# y cambia AUTH_SECRET por un valor aleatorio:  npx auth secret
 
-# 4. Crear la base de datos "stockpilot" en tu instancia de SQL Server (una sola vez)
-npm run db:create
-
-# 5. Aplicar migraciones y cargar datos de prueba
-npm run db:migrate
+# 4. Aplicar migraciones y cargar datos de prueba
+npm run db:deploy
 npm run db:seed
 
-# 6. Iniciar el servidor de desarrollo
+# 5. Iniciar el servidor de desarrollo
 npm run dev
 ```
 
@@ -103,13 +101,14 @@ Abre [http://localhost:3000](http://localhost:3000).
 
 ## 🔐 Variables de entorno
 
-| Variable              | Descripción                                    | Ejemplo                                   |
-| --------------------- | ---------------------------------------------- | ----------------------------------------- |
-| `NODE_ENV`            | Entorno de ejecución                           | `development`                             |
-| `DATABASE_URL`        | Cadena de conexión de Prisma a SQL Server      | `sqlserver://localhost:1433;database=...` |
-| `AUTH_SECRET`         | Secreto para firmar JWT (mínimo 32 caracteres) | `openssl rand -base64 32`                 |
-| `AUTH_URL`            | URL pública de la app (opcional en desarrollo) | `http://localhost:3000`                   |
-| `SKIP_ENV_VALIDATION` | Omite la validación de entorno (útil en CI)    | `true`                                    |
+| Variable              | Descripción                                    | Ejemplo                                             |
+| --------------------- | ---------------------------------------------- | --------------------------------------------------- |
+| `NODE_ENV`            | Entorno de ejecución                           | `development`                                       |
+| `DATABASE_URL`        | Cadena de conexión PostgreSQL (Prisma)         | `postgresql://postgres.REF:...@...:5432/postgres`   |
+| `DIRECT_URL`          | Conexión sin pooler para migraciones (Vercel)  | `postgresql://...pooler.supabase.com:5432/postgres` |
+| `AUTH_SECRET`         | Secreto para firmar JWT (mínimo 32 caracteres) | `openssl rand -base64 32`                           |
+| `AUTH_URL`            | URL pública de la app (opcional en desarrollo) | `http://localhost:3000`                             |
+| `SKIP_ENV_VALIDATION` | Omite la validación de entorno (útil en CI)    | `true`                                              |
 
 Todas se validan con Zod al arrancar; si falta alguna, la app no inicia y muestra qué corregir.
 
@@ -128,7 +127,6 @@ Todas se validan con Zod al arrancar; si falta alguna, la app no inicia y muestr
 | `npm run test:e2e`      | Tests E2E con Playwright (tras `build`)      |
 | `npm run test:e2e:ui`   | Playwright en modo interactivo               |
 | `npm run screenshots`   | Regenera las capturas del README             |
-| `npm run db:create`     | Crea la base de datos si no existe           |
 | `npm run db:migrate`    | Crea y aplica migraciones (desarrollo)       |
 | `npm run db:seed`       | Carga datos de prueba                        |
 | `npm run db:studio`     | Abre Prisma Studio                           |
@@ -182,17 +180,17 @@ Si prefieres no descargar Chromium, usa el navegador instalado:
 
 ## ☁️ Despliegue
 
-La app se despliega en **Vercel** y la base de datos en **Azure SQL Database** (SQL Server
-gestionado, sin cambios en el código). `vercel.json` fija el comando de build, que aplica las
-migraciones antes de compilar. Variables necesarias en Vercel: `DATABASE_URL`, `AUTH_SECRET` y
-`TZ`. Guía completa en [docs/DEPLOY.md](docs/DEPLOY.md).
+La app se despliega en **Vercel** y la base de datos en **Supabase** (PostgreSQL gestionado, plan
+gratuito). `vercel.json` fija el comando de build, que aplica las migraciones antes de compilar.
+Variables necesarias en Vercel: `DATABASE_URL` (pooler de transacciones), `DIRECT_URL` (pooler de
+sesión), `AUTH_SECRET` y `TZ`. Guía completa en [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## ⚙️ Integración continua
 
 `.github/workflows/ci.yml` ejecuta en cada push y pull request:
 
 1. **quality**: lint, formato, tipos, tests unitarios con cobertura y build.
-2. **e2e**: instala SQL Server 2022 de forma nativa en el runner (sin contenedores), crea la base,
+2. **e2e**: arranca el PostgreSQL preinstalado en el runner (servicio nativo, sin contenedores),
    migra, siembra y ejecuta Playwright; el reporte HTML queda como artefacto.
 
 ## 📚 Documentación
@@ -203,14 +201,14 @@ migraciones antes de compilar. Variables necesarias en Vercel: `DATABASE_URL`, `
 | [docs/DATABASE.md](docs/DATABASE.md)                  | Diagrama entidad-relación y tablas                  |
 | [docs/BUSINESS_RULES.md](docs/BUSINESS_RULES.md)      | Reglas de negocio numeradas                         |
 | [docs/API.md](docs/API.md) · [`/api-docs`](/api-docs) | API REST v1, autenticación y ejemplos               |
-| [docs/DEPLOY.md](docs/DEPLOY.md)                      | Despliegue en Vercel con Azure SQL Database         |
-| [docs/adr/](docs/adr/)                                | Decisiones de arquitectura (stack, auth, API)       |
+| [docs/DEPLOY.md](docs/DEPLOY.md)                      | Despliegue en Vercel con Supabase                   |
+| [docs/adr/](docs/adr/)                                | Decisiones de arquitectura (stack, auth, API, BD)   |
 | [CONTRIBUTING.md](CONTRIBUTING.md)                    | Cómo contribuir y convenciones                      |
 | [CHANGELOG.md](CHANGELOG.md)                          | Historial de cambios                                |
 
 ## 🗺️ Roadmap
 
-- [x] **Fase 1:** setup del proyecto, tooling, SQL Server y Prisma conectado
+- [x] **Fase 1:** setup del proyecto, tooling, base de datos y Prisma conectado
 - [x] **Fase 2:** esquema de base de datos, migraciones y seed
 - [x] **Fase 3:** autenticación, roles, middleware y layout principal
 - [x] **Fase 4:** catálogos (categorías, proveedores, almacenes)
@@ -222,7 +220,7 @@ migraciones antes de compilar. Variables necesarias en Vercel: `DATABASE_URL`, `
 - [x] **Fase 10:** tests E2E, CI, documentación final y pulido visual
 
 Ideas para después de la 1.0: múltiples claves de API con caducidad, notificaciones por correo de
-stock bajo, importación masiva de productos por CSV y despliegue en Azure App Service.
+stock bajo, importación masiva de productos por CSV y rate limiting compartido con Redis.
 
 ## 📄 Licencia
 

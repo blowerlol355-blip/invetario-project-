@@ -47,8 +47,18 @@ export interface DashboardData {
 
 const SERIES_DAYS = 30;
 
+/**
+ * Zona horaria del proceso (TZ en Vercel, la del sistema en local). Los cortes de
+ * día en SQL usan la misma zona que date-fns en `fillDailySeries`, de modo que un
+ * movimiento de las 21:00 locales cae en el día local y no en el día UTC.
+ */
+function serverTimeZone(): string {
+  return process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+
 export async function getDashboardData(now: Date = new Date()): Promise<DashboardData> {
   const since = startOfDay(subDays(now, SERIES_DAYS - 1));
+  const timeZone = serverTimeZone();
 
   const [
     valuation,
@@ -61,9 +71,9 @@ export async function getDashboardData(now: Date = new Date()): Promise<Dashboar
     recent,
   ] = await Promise.all([
     prisma.$queryRaw<{ value: number; units: number }[]>(Prisma.sql`
-        SELECT ISNULL(SUM(st.quantity * p.avg_cost), 0) AS value, ISNULL(SUM(st.quantity), 0) AS units
+        SELECT COALESCE(SUM(st.quantity * p.avg_cost), 0) AS value, COALESCE(SUM(st.quantity), 0) AS units
         FROM stocks st INNER JOIN products p ON p.id = st.product_id
-        WHERE p.is_active = 1`),
+        WHERE p.is_active`),
     prisma.product.count({ where: { isActive: true } }),
     getAlertSummary(),
     prisma.stockMovement.count({ where: { createdAt: { gte: startOfDay(now) } } }),
@@ -71,22 +81,23 @@ export async function getDashboardData(now: Date = new Date()): Promise<Dashboar
     prisma.$queryRaw<
       { day: string; inbound: number; outbound: number; movements: number }[]
     >(Prisma.sql`
-        SELECT CONVERT(varchar(10), created_at, 23) AS day,
+        SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE ${timeZone}, 'YYYY-MM-DD') AS day,
                SUM(CASE WHEN type <> 'TRANSFER' AND to_warehouse_id IS NOT NULL THEN quantity ELSE 0 END) AS inbound,
                SUM(CASE WHEN type <> 'TRANSFER' AND from_warehouse_id IS NOT NULL THEN quantity ELSE 0 END) AS outbound,
                COUNT(*) AS movements
         FROM stock_movements
-        WHERE created_at >= ${since}
-        GROUP BY CONVERT(varchar(10), created_at, 23)`),
+        WHERE created_at >= ${since.toISOString()}::timestamp
+        GROUP BY 1`),
     prisma.$queryRaw<
       { id: string; sku: string; name: string; units: number; value: number }[]
     >(Prisma.sql`
-        SELECT TOP 10 p.id, p.sku, p.name, SUM(st.quantity) AS units, SUM(st.quantity * p.avg_cost) AS value
+        SELECT p.id, p.sku, p.name, SUM(st.quantity) AS units, SUM(st.quantity * p.avg_cost) AS value
         FROM stocks st INNER JOIN products p ON p.id = st.product_id
-        WHERE p.is_active = 1
+        WHERE p.is_active
         GROUP BY p.id, p.sku, p.name
         HAVING SUM(st.quantity) > 0
-        ORDER BY value DESC`),
+        ORDER BY value DESC
+        LIMIT 10`),
     prisma.stockMovement.findMany({
       take: 8,
       orderBy: { createdAt: "desc" },

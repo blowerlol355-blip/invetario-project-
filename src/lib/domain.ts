@@ -1,9 +1,9 @@
 /**
  * Constantes de dominio compartidas entre base de datos, servidor y cliente.
  *
- * El conector de Prisma para SQL Server no soporta enums, por lo que estos
- * valores se almacenan como VARCHAR (con constraints CHECK en la migración) y se
- * tipan aquí. Los esquemas Zod de cada módulo deben usar estas listas.
+ * El esquema no usa enums de Prisma: estos valores se almacenan como VARCHAR
+ * (con constraints CHECK en la migración) y se tipan aquí, que es la única fuente
+ * de verdad. Los esquemas Zod de cada módulo deben usar estas listas.
  */
 
 export const USER_ROLES = ["ADMIN", "MANAGER", "OPERATOR"] as const;

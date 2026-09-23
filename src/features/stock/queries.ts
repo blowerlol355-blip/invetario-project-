@@ -49,10 +49,10 @@ export function buildMovementWhere(
           AND: [
             {
               OR: [
-                { product: { name: { contains: params.q } } },
-                { product: { sku: { contains: params.q } } },
-                { reference: { contains: params.q } },
-                { reason: { contains: params.q } },
+                { product: { name: { contains: params.q, mode: "insensitive" } } },
+                { product: { sku: { contains: params.q, mode: "insensitive" } } },
+                { reference: { contains: params.q, mode: "insensitive" } },
+                { reason: { contains: params.q, mode: "insensitive" } },
               ],
             },
           ],
@@ -184,7 +184,10 @@ export async function listStock(
     ...(params.q
       ? {
           product: {
-            OR: [{ name: { contains: params.q } }, { sku: { contains: params.q } }],
+            OR: [
+              { name: { contains: params.q, mode: "insensitive" } },
+              { sku: { contains: params.q, mode: "insensitive" } },
+            ],
           },
         }
       : {}),

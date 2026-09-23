@@ -53,9 +53,9 @@ export async function listProducts(
     ...(params.q
       ? {
           OR: [
-            { name: { contains: params.q } },
-            { sku: { contains: params.q } },
-            { barcode: { contains: params.q } },
+            { name: { contains: params.q, mode: "insensitive" } },
+            { sku: { contains: params.q, mode: "insensitive" } },
+            { barcode: { contains: params.q, mode: "insensitive" } },
           ],
         }
       : {}),

@@ -34,10 +34,10 @@ export function buildAuditWhere(
     ...(params.q
       ? {
           OR: [
-            { entityId: { contains: params.q } },
-            { user: { name: { contains: params.q } } },
-            { before: { contains: params.q } },
-            { after: { contains: params.q } },
+            { entityId: { contains: params.q, mode: "insensitive" } },
+            { user: { name: { contains: params.q, mode: "insensitive" } } },
+            { before: { contains: params.q, mode: "insensitive" } },
+            { after: { contains: params.q, mode: "insensitive" } },
           ],
         }
       : {}),

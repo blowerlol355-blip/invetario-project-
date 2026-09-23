@@ -7,8 +7,8 @@ sostienen y por dónde se extiende. Las decisiones individuales están en `docs/
 
 StockPilot es una aplicación **Next.js 15 (App Router)** de una sola pieza: el mismo proceso sirve
 la interfaz (React Server Components + Client Components), las mutaciones (Server Actions), la API
-REST pública (Route Handlers) y las exportaciones. La base de datos es **SQL Server 2022** accedida
-con **Prisma 7** mediante driver adapter.
+REST pública (Route Handlers) y las exportaciones. La base de datos es **PostgreSQL** (Supabase)
+accedida con **Prisma 7** mediante el driver adapter `@prisma/adapter-pg`.
 
 ```mermaid
 flowchart LR
@@ -24,9 +24,9 @@ flowchart LR
         SA[Server Actions<br/>actions.ts]
         API[Route Handlers<br/>/api/v1, /api/reports]
         DOM[Dominio<br/>lib/ + service.ts]
-        PR[Prisma 7<br/>adapter-mssql]
+        PR[Prisma 7<br/>adapter-pg]
     end
-    DB[(SQL Server 2022)]
+    DB[(PostgreSQL<br/>Supabase)]
 
     UI -->|HTTP| MW --> RSC
     UI -->|POST acción| MW --> SA
@@ -116,7 +116,7 @@ prefijo `E2E-` y los eliminan al terminar (`tests/e2e/global-teardown.ts`).
 ## Integración continua
 
 `.github/workflows/ci.yml` ejecuta lint, formato, tipos, tests con cobertura y build en cada push
-y pull request, y un segundo job instala SQL Server 2022 de forma nativa en el runner (sin
+y pull request, y un segundo job arranca el PostgreSQL preinstalado en el runner (servicio nativo, sin
 contenedores), migra, siembra y ejecuta Playwright.
 
 ## Cómo extender

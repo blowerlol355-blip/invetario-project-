@@ -4,8 +4,7 @@ import { envSchema, parseEnv } from "@/lib/env";
 
 const validEnv = {
   NODE_ENV: "test",
-  DATABASE_URL:
-    "sqlserver://localhost:1433;database=stockpilot;user=sa;password=Secret_123!;encrypt=true;trustServerCertificate=true",
+  DATABASE_URL: "postgresql://postgres:secret@localhost:5432/stockpilot",
   AUTH_SECRET: "un-secreto-suficientemente-largo-para-firmar-jwt-123",
   AUTH_URL: "http://localhost:3000",
 };
@@ -22,12 +21,21 @@ describe("envSchema", () => {
     expect(parsed.NODE_ENV).toBe("development");
   });
 
-  it("rechaza una DATABASE_URL que no sea de SQL Server", () => {
+  it("rechaza una DATABASE_URL que no sea de PostgreSQL", () => {
     const result = envSchema.safeParse({
       ...validEnv,
-      DATABASE_URL: "postgresql://localhost:5432/db",
+      DATABASE_URL: "sqlserver://localhost:1433;database=db",
     });
     expect(result.success).toBe(false);
+  });
+
+  it("acepta el alias postgres:// y una DIRECT_URL opcional", () => {
+    const result = envSchema.safeParse({
+      ...validEnv,
+      DATABASE_URL: "postgres://user:pw@host:6543/postgres",
+      DIRECT_URL: "postgresql://user:pw@host:5432/postgres",
+    });
+    expect(result.success).toBe(true);
   });
 
   it("rechaza un AUTH_SECRET corto", () => {

@@ -36,7 +36,12 @@ export async function listUsers(
     ...statusWhere(params.status),
     ...(filters.role ? { role: filters.role } : {}),
     ...(params.q
-      ? { OR: [{ name: { contains: params.q } }, { email: { contains: params.q } }] }
+      ? {
+          OR: [
+            { name: { contains: params.q, mode: "insensitive" } },
+            { email: { contains: params.q, mode: "insensitive" } },
+          ],
+        }
       : {}),
   };
 

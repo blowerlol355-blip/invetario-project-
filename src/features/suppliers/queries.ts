@@ -39,10 +39,10 @@ export async function listSuppliers(params: ListParams): Promise<Paginated<Suppl
     ...(params.q
       ? {
           OR: [
-            { name: { contains: params.q } },
-            { contactName: { contains: params.q } },
-            { email: { contains: params.q } },
-            { taxId: { contains: params.q } },
+            { name: { contains: params.q, mode: "insensitive" } },
+            { contactName: { contains: params.q, mode: "insensitive" } },
+            { email: { contains: params.q, mode: "insensitive" } },
+            { taxId: { contains: params.q, mode: "insensitive" } },
           ],
         }
       : {}),

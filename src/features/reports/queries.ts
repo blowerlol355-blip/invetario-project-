@@ -49,16 +49,16 @@ export async function getInventoryValuation(
     ? Prisma.sql`AND p.category_id = ${filters.categoryId}`
     : Prisma.empty;
   const search = filters.q
-    ? Prisma.sql`AND (p.name LIKE ${`%${filters.q}%`} OR p.sku LIKE ${`%${filters.q}%`})`
+    ? Prisma.sql`AND (p.name ILIKE ${`%${filters.q}%`} OR p.sku ILIKE ${`%${filters.q}%`})`
     : Prisma.empty;
 
   const rows = await prisma.$queryRaw<RawValuationRow[]>(Prisma.sql`
     SELECT p.id, p.sku, p.name, c.name AS category_name, p.unit, p.min_stock, p.avg_cost,
-           ISNULL(SUM(st.quantity), 0) AS quantity
+           COALESCE(SUM(st.quantity), 0) AS quantity
     FROM products p
     INNER JOIN categories c ON c.id = p.category_id
     LEFT JOIN stocks st ON st.product_id = p.id ${warehouseJoin}
-    WHERE p.is_active = 1 ${categoryWhere} ${search}
+    WHERE p.is_active ${categoryWhere} ${search}
     GROUP BY p.id, p.sku, p.name, c.name, p.unit, p.min_stock, p.avg_cost
     ORDER BY c.name ASC, p.name ASC
   `);
@@ -130,10 +130,10 @@ export async function getKardexReport(
 
   const [opening, movements] = await Promise.all([
     prisma.$queryRaw<{ balance: number }[]>(Prisma.sql`
-      SELECT ISNULL(SUM(CASE WHEN to_warehouse_id IS NOT NULL ${warehouseScopeIn} THEN quantity ELSE 0 END), 0)
-           - ISNULL(SUM(CASE WHEN from_warehouse_id IS NOT NULL ${warehouseScopeOut} THEN quantity ELSE 0 END), 0) AS balance
+      SELECT COALESCE(SUM(CASE WHEN to_warehouse_id IS NOT NULL ${warehouseScopeIn} THEN quantity ELSE 0 END), 0)
+           - COALESCE(SUM(CASE WHEN from_warehouse_id IS NOT NULL ${warehouseScopeOut} THEN quantity ELSE 0 END), 0) AS balance
       FROM stock_movements
-      WHERE product_id = ${product.id} AND created_at < ${fromDate}
+      WHERE product_id = ${product.id} AND created_at < ${fromDate.toISOString()}::timestamp
     `),
     prisma.stockMovement.findMany({
       where: {

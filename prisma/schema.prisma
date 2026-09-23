@@ -1,12 +1,13 @@
-// Esquema de base de datos de StockPilot (Microsoft SQL Server 2022).
+// Esquema de base de datos de StockPilot (PostgreSQL; en producción Supabase).
 //
-// Notas del conector sqlserver:
-// - No soporta `enum`: los campos role, type, status y action son VARCHAR con
-//   constraints CHECK definidos en la migración (ver prisma/migrations) y
-//   tipados en TypeScript en src/lib/domain.ts.
-// - No soporta `Json`: los snapshots de auditoría se guardan como NVARCHAR(MAX).
-// - Los índices únicos tratan NULL como valor: barcode y taxId son opcionales y
-//   su unicidad se valida en la capa de aplicación.
+// Decisiones del esquema:
+// - Sin `enum` de Prisma: role, type, status y action son VARCHAR con constraints
+//   CHECK definidos en la migración (ver prisma/migrations) y tipados en
+//   TypeScript en src/lib/domain.ts, que es la única fuente de valores válidos.
+// - Sin `Json`: los snapshots de auditoría se guardan como TEXT con JSON
+//   serializado (serializeSnapshot) para mantener el diff en la aplicación.
+// - barcode y taxId son opcionales y su unicidad se valida en la capa de
+//   aplicación dentro de la transacción (misma regla que el resto de validaciones).
 // - Todas las relaciones usan NoAction: los catálogos se desactivan (isActive),
 //   nunca se borran físicamente.
 
@@ -16,7 +17,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlserver"
+  provider = "postgresql"
 }
 
 // ----------------------------- Usuarios -----------------------------
@@ -24,8 +25,8 @@ datasource db {
 /// Usuario del sistema. role: ADMIN | MANAGER | OPERATOR.
 model User {
   id              String    @id @default(uuid())
-  name            String    @db.NVarChar(120)
-  email           String    @unique @db.NVarChar(255)
+  name            String    @db.VarChar(120)
+  email           String    @unique @db.VarChar(255)
   passwordHash    String    @map("password_hash") @db.VarChar(255)
   role            String    @default("OPERATOR") @db.VarChar(20)
   isActive        Boolean   @default(true) @map("is_active")
@@ -49,8 +50,8 @@ model User {
 
 model Category {
   id          String   @id @default(uuid())
-  name        String   @unique @db.NVarChar(80)
-  description String?  @db.NVarChar(500)
+  name        String   @unique @db.VarChar(80)
+  description String?  @db.VarChar(500)
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -63,11 +64,11 @@ model Category {
 
 model Supplier {
   id          String   @id @default(uuid())
-  name        String   @db.NVarChar(150)
-  contactName String?  @map("contact_name") @db.NVarChar(120)
-  email       String?  @db.NVarChar(255)
+  name        String   @db.VarChar(150)
+  contactName String?  @map("contact_name") @db.VarChar(120)
+  email       String?  @db.VarChar(255)
   phone       String?  @db.VarChar(30)
-  address     String?  @db.NVarChar(255)
+  address     String?  @db.VarChar(255)
   /// Identificación fiscal (RUC, NIT, RFC, CUIT...). Unicidad validada en la aplicación.
   taxId       String?  @map("tax_id") @db.VarChar(30)
   isActive    Boolean  @default(true) @map("is_active")
@@ -85,9 +86,9 @@ model Supplier {
 
 model Warehouse {
   id        String   @id @default(uuid())
-  name      String   @db.NVarChar(100)
+  name      String   @db.VarChar(100)
   code      String   @unique @db.VarChar(10)
-  address   String?  @db.NVarChar(255)
+  address   String?  @db.VarChar(255)
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -108,8 +109,8 @@ model Product {
   sku         String   @unique @db.VarChar(40)
   /// Código de barras (EAN/UPC). Unicidad validada en la aplicación.
   barcode     String?  @db.VarChar(50)
-  name        String   @db.NVarChar(200)
-  description String?  @db.NVarChar(1000)
+  name        String   @db.VarChar(200)
+  description String?  @db.VarChar(1000)
   categoryId  String   @map("category_id")
   supplierId  String?  @map("supplier_id")
   /// Unidad de medida: unidad, par, caja, paquete, rollo, litro, kg...
@@ -174,7 +175,7 @@ model StockMovement {
   quantity        Int
   /// Costo unitario de la entrada; alimenta el costo promedio ponderado.
   unitCost        Decimal? @map("unit_cost") @db.Decimal(12, 4)
-  reason          String?  @db.NVarChar(255)
+  reason          String?  @db.VarChar(255)
   /// Documento de respaldo: factura, ticket, código de orden de compra...
   reference       String?  @db.VarChar(60)
   userId          String   @map("user_id")
@@ -205,7 +206,7 @@ model PurchaseOrder {
   warehouseId  String    @map("warehouse_id")
   status       String    @default("DRAFT") @db.VarChar(30)
   expectedDate DateTime? @map("expected_date")
-  notes        String?   @db.NVarChar(1000)
+  notes        String?   @db.VarChar(1000)
   createdById  String    @map("created_by_id")
   sentAt       DateTime? @map("sent_at")
   receivedAt   DateTime? @map("received_at")
@@ -244,15 +245,15 @@ model PurchaseOrderItem {
 // ----------------------------- Auditoría ----------------------------
 
 /// Bitácora de cambios. action: CREATE | UPDATE | DELETE | STATUS_CHANGE.
-/// before/after guardan snapshots JSON serializados (SQL Server no soporta Json en Prisma).
+/// before/after guardan snapshots JSON serializados como texto (ver serializeSnapshot).
 model AuditLog {
   id        String   @id @default(uuid())
   userId    String?  @map("user_id")
   action    String   @db.VarChar(20)
   entity    String   @db.VarChar(50)
   entityId  String   @map("entity_id") @db.VarChar(64)
-  before    String?  @db.NVarChar(Max)
-  after     String?  @db.NVarChar(Max)
+  before    String?  @db.Text
+  after     String?  @db.Text
   createdAt DateTime @default(now()) @map("created_at")
 
   user User? @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)

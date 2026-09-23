@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-import { PrismaMssql } from "@prisma/adapter-mssql";
+import { PrismaPg } from "@prisma/adapter-pg";
 
 import { PrismaClient } from "../../src/generated/prisma/client";
 
@@ -13,7 +13,9 @@ const E2E_PREFIX = "E2E-";
  */
 async function cleanup() {
   if (!process.env.DATABASE_URL) return;
-  const prisma = new PrismaClient({ adapter: new PrismaMssql(process.env.DATABASE_URL) });
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  });
 
   try {
     const products = await prisma.product.findMany({

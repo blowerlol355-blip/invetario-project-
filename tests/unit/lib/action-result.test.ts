@@ -44,7 +44,7 @@ describe("toActionError", () => {
     });
   });
 
-  it("detecta el índice violado en el mensaje del driver adapter de SQL Server", () => {
+  it("detecta el índice violado en los metadatos del driver adapter", () => {
     const error = new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
       code: "P2002",
       clientVersion: "test",
@@ -53,9 +53,8 @@ describe("toActionError", () => {
           name: "DriverAdapterError",
           cause: {
             kind: "UniqueConstraintViolation",
-            originalMessage:
-              "Violation of UNIQUE KEY constraint warehouses_code_key. Cannot insert duplicate key in object dbo.warehouses.",
-            constraint: { index: "dbo.warehouses" },
+            originalMessage: 'duplicate key value violates unique constraint "warehouses_code_key"',
+            constraint: { index: "warehouses_code_key" },
           },
         },
         modelName: "Warehouse",

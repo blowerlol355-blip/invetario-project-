@@ -56,9 +56,9 @@ export async function listPurchaseOrders(
     ...(params.q
       ? {
           OR: [
-            { code: { contains: params.q } },
-            { supplier: { name: { contains: params.q } } },
-            { notes: { contains: params.q } },
+            { code: { contains: params.q, mode: "insensitive" } },
+            { supplier: { name: { contains: params.q, mode: "insensitive" } } },
+            { notes: { contains: params.q, mode: "insensitive" } },
           ],
         }
       : {}),

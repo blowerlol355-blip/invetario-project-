@@ -24,8 +24,8 @@ function toData(input: SupplierInput) {
 }
 
 /**
- * La unicidad de taxId se valida aquí porque los índices únicos de SQL Server
- * no admiten varios NULL (ver docs/DATABASE.md).
+ * La unicidad de taxId se valida aquí, dentro de la transacción y junto al resto de
+ * reglas de negocio, para devolver un mensaje de campo claro (ver docs/DATABASE.md).
  */
 async function assertTaxIdAvailable(db: DbClient, taxId: string | null, excludeId?: string) {
   if (!taxId) return;

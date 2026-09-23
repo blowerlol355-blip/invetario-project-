@@ -36,8 +36,8 @@ export function isUniqueViolation(error: unknown): error is Prisma.PrismaClientK
 
 /**
  * Texto donde buscar el nombre del índice violado. Con el motor clásico Prisma
- * rellena `meta.target`; con el driver adapter de SQL Server el nombre del
- * constraint solo aparece en el mensaje original del driver.
+ * rellena `meta.target`; con un driver adapter (pg) el nombre del constraint
+ * puede llegar solo en `meta.driverAdapterError` (índice, campos o mensaje original).
  */
 export function uniqueTarget(error: Prisma.PrismaClientKnownRequestError): string {
   const meta = (error.meta ?? {}) as Record<string, unknown>;
@@ -59,7 +59,7 @@ export function uniqueTarget(error: Prisma.PrismaClientKnownRequestError): strin
 
 /**
  * Convierte cualquier error lanzado dentro de una Server Action en un ActionResult
- * seguro para el cliente. Nunca expone mensajes internos de Prisma o SQL Server.
+ * seguro para el cliente. Nunca expone mensajes internos de Prisma o PostgreSQL.
  */
 export function toActionError<T = never>(
   error: unknown,

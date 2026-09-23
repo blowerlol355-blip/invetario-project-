@@ -5,15 +5,22 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto
 adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
-## [Unreleased]
+## [1.1.0] - 2026-09-23
 
-### Added
+### Changed
 
-- Preparación para despliegue en Vercel con Azure SQL Database: `vercel.json` (build con migraciones, región), trazado de las fuentes de PDFKit para las funciones serverless y guía `docs/DEPLOY.md`.
+- **Migración de SQL Server a PostgreSQL (Supabase)** (ADR 0004): provider `postgresql`, driver adapter `@prisma/adapter-pg`, nueva migración inicial con los mismos constraints `CHECK`, SQL crudo portado (`COALESCE`, `LIMIT/OFFSET`, `ILIKE`, `to_char`) y búsquedas de texto insensibles a mayúsculas (`mode: "insensitive"`).
+- La agrupación diaria del dashboard usa la zona horaria del proceso (`TZ`), también en SQL, en lugar de la fecha UTC.
+- CI: el job E2E usa el PostgreSQL preinstalado en el runner de Ubuntu (servicio nativo, sin contenedores).
+- Despliegue en Vercel con Supabase: `vercel.json` (build con migraciones, región `iad1`), variables `DATABASE_URL`/`DIRECT_URL`, trazado de las fuentes de PDFKit para las funciones serverless y guía `docs/DEPLOY.md`.
+
+### Removed
+
+- Script `db:create` (`scripts/create-database.ts`) y dependencias `mssql`/`@prisma/adapter-mssql`.
 
 ### Fixed
 
-- `prisma generate` (postinstall) ya no falla cuando `DATABASE_URL` no está definida: `prisma.config.ts` usa un marcador y solo las migraciones y el seed exigen la variable real.
+- `prisma generate` (postinstall) ya no falla cuando `DATABASE_URL` no está definida o está vacía: `prisma.config.ts` usa un marcador y solo las migraciones y el seed exigen la variable real.
 
 ## [1.0.0] - 2026-09-23
 

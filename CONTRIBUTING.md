@@ -6,8 +6,8 @@ del código y el flujo de trabajo para proponer cambios.
 ## Requisitos
 
 - Node.js 20.19 o superior (recomendado 22) y npm.
-- SQL Server 2022 (Developer o Express) accesible por TCP en el puerto 1433, con autenticación
-  SQL. En Windows se instala como servicio; no se usan contenedores en este proyecto.
+- Un proyecto de PostgreSQL en [Supabase](https://supabase.com) (plan gratuito) o cualquier
+  PostgreSQL 15+. No se instala ninguna base de datos en el equipo ni se usan contenedores.
 
 ## Puesta en marcha
 
@@ -15,9 +15,8 @@ del código y el flujo de trabajo para proponer cambios.
 git clone https://github.com/blowerlol355-blip/invetario-project-.git
 cd invetario-project-
 npm install                # genera el cliente Prisma (postinstall)
-cp .env.example .env       # ajusta DATABASE_URL y AUTH_SECRET
-npm run db:create          # crea la base de datos
-npm run db:migrate         # aplica las migraciones
+cp .env.example .env       # DATABASE_URL = cadena "Session pooler" de Supabase; AUTH_SECRET aleatorio
+npm run db:deploy          # aplica las migraciones
 npm run db:seed            # usuarios demo, catálogos, 150 productos y ~540 movimientos
 npm run dev                # http://localhost:3000
 ```
@@ -73,5 +72,5 @@ el instalado en tu equipo con `PLAYWRIGHT_CHANNEL=chrome` (o `msedge`).
 ## Reportar problemas
 
 Abre un issue con los pasos para reproducir, el comportamiento esperado y el observado, y la
-versión de Node y SQL Server. Si es una vulnerabilidad de seguridad, contacta al autor de forma
+versión de Node y PostgreSQL. Si es una vulnerabilidad de seguridad, contacta al autor de forma
 privada en lugar de abrir un issue público.

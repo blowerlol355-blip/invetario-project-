@@ -12,7 +12,12 @@ export const envSchema = z.object({
   DATABASE_URL: z
     .string()
     .min(1, "DATABASE_URL es obligatoria")
-    .startsWith("sqlserver://", "DATABASE_URL debe usar el protocolo sqlserver://"),
+    .startsWith("postgres", "DATABASE_URL debe usar el protocolo postgresql://"),
+  /** Conexión directa (sin pooler) para migraciones y seed; opcional. */
+  DIRECT_URL: z
+    .string()
+    .startsWith("postgres", "DIRECT_URL debe usar el protocolo postgresql://")
+    .optional(),
   AUTH_SECRET: z.string().min(32, "AUTH_SECRET debe tener al menos 32 caracteres"),
   AUTH_URL: z.url("AUTH_URL debe ser una URL válida").optional(),
 });

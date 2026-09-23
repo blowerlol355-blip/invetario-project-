@@ -20,7 +20,7 @@ compra (Fase 7) reutilizan esta misma función para generar sus entradas.
 
 `runStockMovement` (`run-movement.ts`) envuelve la función en una transacción con aislamiento
 **Serializable**, registra la entrada de auditoría y reintenta hasta tres veces ante conflictos
-de concurrencia detectados por SQL Server.
+de concurrencia detectados por PostgreSQL (`P2034`).
 
 ## 2. Tipos de movimiento
 
@@ -105,7 +105,7 @@ Un producto inactivo no admite movimientos; un almacén inactivo no puede ser or
 - `sku` de producto, `code` de almacén, `name` de categoría y `email` de usuario: índice único en
   la base de datos.
 - `barcode` de producto y `taxId` de proveedor: opcionales; se validan como únicos en la
-  aplicación porque SQL Server no admite varios `NULL` en un índice único.
+  aplicación, dentro de la misma transacción, para devolver un mensaje de campo claro.
 
 ## 10. Permisos
 

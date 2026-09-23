@@ -11,7 +11,8 @@ arquitectura clara, buena experiencia de usuario y documentación completa.
 ## Stack tecnológico
 
 - Next.js 15 (App Router), React 19, TypeScript estricto
-- Microsoft SQL Server 2022 con Prisma (provider `sqlserver`, migraciones versionadas)
+- PostgreSQL (Supabase) con Prisma (provider `postgresql`, migraciones versionadas). Nota: la
+  especificación original pedía SQL Server 2022; se migró al desplegar (ver ADR 0004)
 - Auth.js (NextAuth v5) con credenciales, bcrypt y sesiones JWT
 - Tailwind CSS + shadcn/ui + lucide-react, modo claro/oscuro
 - React Hook Form + Zod (esquemas compartidos cliente/servidor)

@@ -1,6 +1,7 @@
 # ADR 0001: Elección del stack tecnológico
 
-- **Estado:** aceptado
+- **Estado:** aceptado; la elección de base de datos fue reemplazada por el
+  [ADR 0004](0004-migracion-a-postgresql-y-supabase.md) (PostgreSQL en Supabase)
 - **Fecha:** 2026-09-22
 
 ## Contexto

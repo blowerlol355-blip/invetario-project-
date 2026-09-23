@@ -47,20 +47,20 @@ interface RawAlertRow {
  */
 function alertsSelect(q: string) {
   const search = q
-    ? Prisma.sql`AND (p.name LIKE ${`%${q}%`} OR p.sku LIKE ${`%${q}%`})`
+    ? Prisma.sql`AND (p.name ILIKE ${`%${q}%`} OR p.sku ILIKE ${`%${q}%`})`
     : Prisma.empty;
   return Prisma.sql`
     SELECT p.id, p.sku, p.name, p.unit, c.name AS category_name,
            p.supplier_id, s.name AS supplier_name,
            p.min_stock, p.max_stock,
-           ISNULL(SUM(st.quantity), 0) AS total_stock
+           COALESCE(SUM(st.quantity), 0) AS total_stock
     FROM products p
     INNER JOIN categories c ON c.id = p.category_id
     LEFT JOIN suppliers s ON s.id = p.supplier_id
     LEFT JOIN stocks st ON st.product_id = p.id
-    WHERE p.is_active = 1 ${search}
+    WHERE p.is_active ${search}
     GROUP BY p.id, p.sku, p.name, p.unit, c.name, p.supplier_id, s.name, p.min_stock, p.max_stock
-    HAVING ISNULL(SUM(st.quantity), 0) <= p.min_stock
+    HAVING COALESCE(SUM(st.quantity), 0) <= p.min_stock
   `;
 }
 
@@ -71,8 +71,8 @@ export async function listAlerts(params: ListParams): Promise<Paginated<AlertRow
   const [rows, countRows] = await Promise.all([
     prisma.$queryRaw<RawAlertRow[]>(Prisma.sql`
       ${base}
-      ORDER BY (ISNULL(SUM(st.quantity), 0) - p.min_stock) ASC, p.name ASC
-      OFFSET ${skip} ROWS FETCH NEXT ${take} ROWS ONLY
+      ORDER BY (COALESCE(SUM(st.quantity), 0) - p.min_stock) ASC, p.name ASC
+      LIMIT ${take} OFFSET ${skip}
     `),
     prisma.$queryRaw<{ total: number }[]>(
       Prisma.sql`SELECT COUNT(*) AS total FROM (${base}) AS alerts`,
@@ -129,11 +129,11 @@ export async function listAlerts(params: ListParams): Promise<Paginated<AlertRow
 
 export async function getAlertSummary(): Promise<AlertSummary> {
   const rows = await prisma.$queryRaw<{ total_stock: number }[]>(Prisma.sql`
-    SELECT ISNULL(SUM(st.quantity), 0) AS total_stock
+    SELECT COALESCE(SUM(st.quantity), 0) AS total_stock
     FROM products p LEFT JOIN stocks st ON st.product_id = p.id
-    WHERE p.is_active = 1
+    WHERE p.is_active
     GROUP BY p.id, p.min_stock
-    HAVING ISNULL(SUM(st.quantity), 0) <= p.min_stock
+    HAVING COALESCE(SUM(st.quantity), 0) <= p.min_stock
   `);
   return {
     total: rows.length,

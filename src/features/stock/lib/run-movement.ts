@@ -10,7 +10,7 @@ import { withSerializableTransaction } from "@/lib/transaction";
 
 /**
  * Ejecuta un movimiento en su propia transacción serializable y lo audita.
- * Reintenta ante conflictos de concurrencia detectados por SQL Server.
+ * Reintenta ante conflictos de concurrencia detectados por PostgreSQL (P2034).
  */
 export async function runStockMovement(
   command: StockMovementCommand,

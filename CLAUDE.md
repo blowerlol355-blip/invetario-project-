@@ -8,7 +8,7 @@ comandos y decisiones que deben respetarse en cada fase.
 
 | Fase | Descripción                                         | Estado        |
 | ---- | --------------------------------------------------- | ------------- |
-| 1    | Setup, tooling, SQL Server local, Prisma conectado  | ✅ Completada |
+| 1    | Setup, tooling, base de datos, Prisma conectado     | ✅ Completada |
 | 2    | Esquema de base de datos, migraciones y seed        | ✅ Completada |
 | 3    | Autenticación, roles, middleware y layout principal | ✅ Completada |
 | 4    | Catálogos: categorías, proveedores, almacenes       | ✅ Completada |
@@ -18,6 +18,7 @@ comandos y decisiones que deben respetarse en cada fase.
 | 8    | Dashboard y reportes con exportación                | ✅ Completada |
 | 9    | Usuarios, auditoría y API REST con OpenAPI          | ✅ Completada |
 | 10   | Tests, CI, documentación final y pulido visual      | ✅ Completada |
+| 11   | Migración a PostgreSQL (Supabase) y despliegue      | ✅ Completada |
 
 ## Forma de trabajo
 
@@ -96,36 +97,43 @@ docs/                documentación y ADRs
 Ver `docs/adr/` para el detalle. Resumen:
 
 - **Prisma 7 con driver adapter.** No hay motor nativo; `src/lib/db.ts` crea el cliente con
-  `@prisma/adapter-mssql` usando la misma `DATABASE_URL` que las migraciones. El cliente se
-  genera en `src/generated/prisma` (provider `prisma-client`) y se importa desde
-  `@/generated/prisma/client`.
+  `@prisma/adapter-pg` (`connectionString: DATABASE_URL`, pool `max` 3 en producción). El cliente
+  se genera en `src/generated/prisma` (provider `prisma-client`) y se importa desde
+  `@/generated/prisma/client`. `prisma.config.ts` usa `DIRECT_URL` (si existe) o `DATABASE_URL`
+  para migraciones y seed, con un marcador cuando faltan para que `prisma generate` (postinstall)
+  no falle en `npm install`.
 - **Variables de entorno.** Validadas con Zod en `src/lib/env.ts`, importado desde
   `next.config.ts` para fallar al arrancar. `SKIP_ENV_VALIDATION=true` las omite (CI).
   Nunca importar `env.ts` desde componentes cliente. Los scripts sueltos que importen `@/lib/db`
   deben ejecutarse con `npx tsx --env-file=.env <archivo>` (tsx no carga `.env` por sí solo).
-- **Base de datos local, sin Docker.** SQL Server 2022 Developer instalado como servicio de Windows
-  (instancia por defecto `MSSQLSERVER`, autenticación SQL, TCP 1433). El usuario no quiere
-  contenedores en este proyecto. `npm run db:create` crea la base `stockpilot` antes de la primera
-  migración.
-- **Cabeceras de seguridad** en `next.config.ts`. La CSP está en modo report-only hasta la
-  Fase 10.
+- **PostgreSQL en Supabase, sin Docker ni instalación local.** Desde la Fase 11 (ADR 0004) la
+  base es PostgreSQL alojada en Supabase tanto en producción como en desarrollo: el usuario no
+  quiere contenedores ni instalar bases de datos en su equipo. En `.env` local `DATABASE_URL` es el
+  _session pooler_ (puerto 5432); en Vercel `DATABASE_URL` es el _transaction pooler_ (6543) y
+  `DIRECT_URL` el session pooler. El proyecto nació en SQL Server 2022 (Fases 1-10); las
+  migraciones de SQL Server se reemplazaron por una migración inicial de PostgreSQL.
+- **Cabeceras de seguridad** en `next.config.ts`. La CSP está en modo estricto desde la Fase 10.
 - **Stock solo vía movimientos.** Un único servicio de dominio aplicará movimientos dentro de
   `prisma.$transaction` (Fase 6). Ninguna otra ruta modifica `Stock` directamente.
 - **Costo promedio ponderado.** `Product.avgCost` se recalcula en cada entrada con costo.
 
 ## Modelo de datos (resumen; detalle en docs/DATABASE.md)
 
-- **Sin enums ni Json en SQL Server.** role, type, status y action son VARCHAR con constraints
+- **Sin enums ni Json de Prisma.** role, type, status y action son VARCHAR con constraints
   CHECK escritos a mano en la migración; los valores válidos y sus etiquetas en español viven en
   `src/lib/domain.ts` (USER_ROLES, MOVEMENT_TYPES, PURCHASE_ORDER_STATUSES, AUDIT_ACTIONS).
-  Los esquemas Zod deben derivarse de esas listas. Los snapshots de auditoría son NVARCHAR(MAX).
+  Los esquemas Zod deben derivarse de esas listas. Los snapshots de auditoría son TEXT con JSON.
+- **PostgreSQL distingue mayúsculas en `contains`:** toda búsqueda de texto con Prisma lleva
+  `mode: "insensitive"` y el SQL crudo usa `ILIKE`. En SQL crudo: `COALESCE`, `LIMIT/OFFSET`,
+  booleanos sin `= 1`, y los parámetros `Date` se pasan como `${d.toISOString()}::timestamp`.
+  Los agregados `SUM`/`COUNT` llegan como bigint/Decimal: convertir siempre con `Number()`.
 - **Nombres:** tablas snake_case plural y columnas snake_case (`@map`); en TypeScript camelCase.
 - **Convención de movimientos:** quantity siempre > 0. IN usa toWarehouseId, OUT fromWarehouseId,
   TRANSFER ambos, ADJUSTMENT exactamente uno (to = aumenta, from = disminuye). Un CHECK lo exige.
 - **Costo promedio:** `calculateWeightedAverageCost` en `src/features/stock/lib/average-cost.ts`
   es la única implementación; el seed y el servicio de movimientos (Fase 6) la comparten.
-- **Unicidad de barcode y taxId** se valida en la aplicación (índices únicos de SQL Server no
-  admiten varios NULL).
+- **Unicidad de barcode y taxId** se valida en la aplicación dentro de la transacción (mensaje de
+  campo claro y una sola implementación de las reglas).
 - **Migraciones con SQL manual:** al crear una migración que necesite CHECK u otro SQL propio,
   usar `prisma migrate dev --create-only`, editar el archivo dentro de la transacción y aplicar.
   `prisma migrate reset` requiere consentimiento explícito del usuario (Prisma lo bloquea para
@@ -183,8 +191,8 @@ Reglas transversales:
 - Soft delete: "Desactivar" pone `isActive=false` y se audita como `DELETE`; reactivar como `UPDATE`.
   Reglas: no desactivar categorías con productos activos, proveedores con órdenes abiertas ni
   almacenes con existencias.
-- Unicidad: `toActionError` reconoce P2002 leyendo también `meta.driverAdapterError` (el adapter de
-  SQL Server no rellena `meta.target`). Para columnas opcionales únicas (taxId, barcode) validar a
+- Unicidad: `toActionError` reconoce P2002 leyendo también `meta.driverAdapterError` (los driver
+  adapters no siempre rellenan `meta.target`). Para columnas opcionales únicas (taxId, barcode) validar a
   mano en la transacción.
 - `server-only` está mapeado a un módulo vacío en Vitest (`tests/mocks/server-only.ts`) para poder
   testear módulos de servidor; `@/lib/auth` se mockea con `vi.mock` cuando hace falta.
@@ -314,9 +322,9 @@ Reglas transversales:
 - **Capturas del README**: `npm run screenshots` (proyecto `screenshots` de Playwright) escribe en
   `docs/screenshots/`; no forma parte de la suite normal.
 - **CI** (`.github/workflows/ci.yml`): job `quality` (lint, formato, tipos, cobertura, build con
-  `SKIP_ENV_VALIDATION`) y job `e2e` en `ubuntu-22.04` que instala SQL Server 2022 con apt (nativo,
-  sin contenedores, respetando la preferencia del usuario), crea la base, migra, siembra y ejecuta
-  Playwright.
+  `SKIP_ENV_VALIDATION`) y job `e2e` en `ubuntu-latest` que arranca el PostgreSQL preinstalado en
+  el runner (servicio nativo, sin contenedores, respetando la preferencia del usuario), crea la
+  base con `psql`, migra, siembra y ejecuta Playwright.
 - **Cobertura**: `vitest.config.mts` exige umbrales en la lógica de negocio (`src/features/**/lib`,
   `src/features/api`, `src/lib` salvo integración); `npm run test:coverage` falla si baja del 70 %.
 - **CSP en modo estricto** (`next.config.ts`): `'unsafe-eval'` solo con `NODE_ENV=development`.
@@ -324,19 +332,24 @@ Reglas transversales:
 - Versión 1.0.0 en `package.json` y `CHANGELOG.md`. Documentación de cierre: `docs/ARCHITECTURE.md`
   y `CONTRIBUTING.md`.
 
-## Despliegue (Vercel + Azure SQL)
+## Despliegue (Vercel + Supabase, Fase 11)
 
 - Producción en Vercel (import del repo de GitHub, despliegue automático en cada push a `main`) con
-  Azure SQL Database (mismo conector `sqlserver`, cadena sin `trustServerCertificate`).
-  `vercel.json` fija `buildCommand: npm run db:deploy && npm run build` y la región `iad1`.
-- Variables en Vercel: `DATABASE_URL`, `AUTH_SECRET`, `TZ=America/Caracas` (zona horaria del
-  negocio; los cortes de fecha usan la hora del servidor). `AUTH_URL` no hace falta (`trustHost`).
+  PostgreSQL en Supabase (ADR 0004). `vercel.json` fija
+  `buildCommand: npm run db:deploy && npm run build` y la región `iad1` (East US de Supabase).
+- Variables en Vercel: `DATABASE_URL` (transaction pooler 6543), `DIRECT_URL` (session pooler
+  5432, para `migrate deploy`), `AUTH_SECRET`, `TZ=America/Caracas` (zona horaria del negocio; los
+  cortes de fecha, incluidos los del SQL del dashboard, usan la zona del proceso). `AUTH_URL` no
+  hace falta (`trustHost`).
 - Las funciones serverless solo incluyen archivos trazados: `outputFileTracingIncludes` añade
   `node_modules/pdfkit/js/data/**` (métricas de Helvetica) a la ruta de reportes. Si se añade otra
   dependencia que lea archivos en tiempo de ejecución, registrarla ahí.
 - `prepare` es `husky || true` para que la instalación no falle donde husky no está disponible.
-- Seed y primera migración se ejecutan desde el equipo local apuntando a Azure (`docs/DEPLOY.md`).
-  El rate limiting en memoria es por instancia en serverless (documentado como limitación).
+- Seed y primera migración se ejecutan desde el equipo local apuntando a Supabase
+  (`docs/DEPLOY.md`). El rate limiting en memoria es por instancia en serverless (documentado como
+  limitación).
+- Para verificar cambios de esquema sin tocar Supabase se puede usar un PostgreSQL portátil en el
+  scratchpad (paquete npm `embedded-postgres`, puerto 5433); nunca instalarlo en el sistema.
 
 ## Verificaciones antes de commit
 
