@@ -180,6 +180,13 @@ npm run build && npm run test:e2e
 Si prefieres no descargar Chromium, usa el navegador instalado:
 `PLAYWRIGHT_CHANNEL=chrome npm run test:e2e` (o `msedge`).
 
+## ☁️ Despliegue
+
+La app se despliega en **Vercel** y la base de datos en **Azure SQL Database** (SQL Server
+gestionado, sin cambios en el código). `vercel.json` fija el comando de build, que aplica las
+migraciones antes de compilar. Variables necesarias en Vercel: `DATABASE_URL`, `AUTH_SECRET` y
+`TZ`. Guía completa en [docs/DEPLOY.md](docs/DEPLOY.md).
+
 ## ⚙️ Integración continua
 
 `.github/workflows/ci.yml` ejecuta en cada push y pull request:
@@ -196,6 +203,7 @@ Si prefieres no descargar Chromium, usa el navegador instalado:
 | [docs/DATABASE.md](docs/DATABASE.md)                  | Diagrama entidad-relación y tablas                  |
 | [docs/BUSINESS_RULES.md](docs/BUSINESS_RULES.md)      | Reglas de negocio numeradas                         |
 | [docs/API.md](docs/API.md) · [`/api-docs`](/api-docs) | API REST v1, autenticación y ejemplos               |
+| [docs/DEPLOY.md](docs/DEPLOY.md)                      | Despliegue en Vercel con Azure SQL Database         |
 | [docs/adr/](docs/adr/)                                | Decisiones de arquitectura (stack, auth, API)       |
 | [CONTRIBUTING.md](CONTRIBUTING.md)                    | Cómo contribuir y convenciones                      |
 | [CHANGELOG.md](CHANGELOG.md)                          | Historial de cambios                                |

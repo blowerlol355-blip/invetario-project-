@@ -39,6 +39,11 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   // pdfmake usa pdfkit y fuentes en binario: se ejecuta en Node sin empaquetar.
   serverExternalPackages: ["pdfmake"],
+  // En Vercel las funciones solo incluyen los archivos trazados: las métricas de las fuentes
+  // estándar de PDFKit (Helvetica) se leen del disco en tiempo de ejecución.
+  outputFileTracingIncludes: {
+    "/api/reports/[report]": ["./node_modules/pdfkit/js/data/**"],
+  },
   poweredByHeader: false,
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];

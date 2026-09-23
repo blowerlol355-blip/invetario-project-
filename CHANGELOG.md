@@ -7,6 +7,10 @@ adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Added
+
+- Preparación para despliegue en Vercel con Azure SQL Database: `vercel.json` (build con migraciones, región), trazado de las fuentes de PDFKit para las funciones serverless y guía `docs/DEPLOY.md`.
+
 ## [1.0.0] - 2026-09-23
 
 Primera versión completa: los diez módulos del proyecto, la API REST y la documentación final.

@@ -324,6 +324,20 @@ Reglas transversales:
 - Versión 1.0.0 en `package.json` y `CHANGELOG.md`. Documentación de cierre: `docs/ARCHITECTURE.md`
   y `CONTRIBUTING.md`.
 
+## Despliegue (Vercel + Azure SQL)
+
+- Producción en Vercel (import del repo de GitHub, despliegue automático en cada push a `main`) con
+  Azure SQL Database (mismo conector `sqlserver`, cadena sin `trustServerCertificate`).
+  `vercel.json` fija `buildCommand: npm run db:deploy && npm run build` y la región `iad1`.
+- Variables en Vercel: `DATABASE_URL`, `AUTH_SECRET`, `TZ=America/Caracas` (zona horaria del
+  negocio; los cortes de fecha usan la hora del servidor). `AUTH_URL` no hace falta (`trustHost`).
+- Las funciones serverless solo incluyen archivos trazados: `outputFileTracingIncludes` añade
+  `node_modules/pdfkit/js/data/**` (métricas de Helvetica) a la ruta de reportes. Si se añade otra
+  dependencia que lea archivos en tiempo de ejecución, registrarla ahí.
+- `prepare` es `husky || true` para que la instalación no falle donde husky no está disponible.
+- Seed y primera migración se ejecutan desde el equipo local apuntando a Azure (`docs/DEPLOY.md`).
+  El rate limiting en memoria es por instancia en serverless (documentado como limitación).
+
 ## Verificaciones antes de commit
 
 Husky ejecuta `lint-staged` (ESLint + Prettier) en `pre-commit` y `commitlint` en `commit-msg`.
