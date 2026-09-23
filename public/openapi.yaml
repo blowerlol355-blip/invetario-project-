@@ -1,0 +1,683 @@
+openapi: 3.1.0
+info:
+  title: StockPilot API
+  version: "1.0.0"
+  summary: API REST del sistema de gestión de inventario StockPilot.
+  description: |
+    API pública para integrar StockPilot con otros sistemas (tiendas en línea, ERP, scripts).
+
+    ## Autenticación
+
+    Todas las rutas exigen identidad. Hay dos mecanismos:
+
+    - **Clave de API** (integraciones): cabecera `Authorization: Bearer sp_...`. Un
+      administrador genera la clave desde *Usuarios → Generar clave de API*; hereda los
+      permisos del rol del usuario y solo se muestra una vez.
+    - **Sesión del navegador**: si estás conectado a la aplicación, las peticiones desde
+      esta misma página usan tu cookie de sesión.
+
+    ## Permisos por rol
+
+    | Ruta | OPERATOR | MANAGER | ADMIN |
+    | --- | --- | --- | --- |
+    | `GET /products`, `GET /products/{id}`, `GET /stock` | ✅ | ✅ | ✅ |
+    | `POST /products`, `PUT /products/{id}` | ❌ | ✅ | ✅ |
+    | `GET /movements`, `POST /movements` | ✅ | ✅ | ✅ |
+
+    ## Paginación y formato
+
+    Los listados devuelven `{ "data": [...], "meta": { page, pageSize, total, pageCount } }`
+    con `pageSize` entre 1 y 100 (20 por defecto). Las respuestas simples devuelven `{ "data": {...} }`.
+    Los errores siempre tienen la forma `{ "error": { code, message, details? } }`.
+
+    ## Límite de peticiones
+
+    120 peticiones por minuto por identidad (`X-RateLimit-Limit`, `X-RateLimit-Remaining`);
+    al superarlo se responde `429` con `Retry-After`.
+  contact:
+    name: Blower Bosques
+  license:
+    name: MIT
+servers:
+  - url: /api/v1
+    description: Servidor actual
+  - url: http://localhost:3000/api/v1
+    description: Desarrollo local
+security:
+  - ApiKeyAuth: []
+  - SessionCookie: []
+tags:
+  - name: Identidad
+    description: Comprobar con qué usuario y permisos se autenticó la petición.
+  - name: Productos
+    description: Catálogo de productos con existencia total y por almacén.
+  - name: Stock
+    description: Existencias por producto y almacén.
+  - name: Movimientos
+    description: Historial y registro de entradas, salidas, ajustes y transferencias.
+paths:
+  /me:
+    get:
+      tags: [Identidad]
+      summary: Identidad de la petición
+      operationId: getMe
+      responses:
+        "200":
+          description: Usuario autenticado y sus permisos.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Principal"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /products:
+    get:
+      tags: [Productos]
+      summary: Listar productos
+      operationId: listProducts
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: q
+          in: query
+          description: Busca por nombre, SKU o código de barras.
+          schema: { type: string, maxLength: 100 }
+        - name: status
+          in: query
+          schema: { type: string, enum: [all, active, inactive], default: active }
+        - name: categoryId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: supplierId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [sku, name, category, costPrice, salePrice, minStock, createdAt]
+            default: name
+        - $ref: "#/components/parameters/Order"
+      responses:
+        "200":
+          description: Página de productos.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProductSummary"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+    post:
+      tags: [Productos]
+      summary: Crear producto
+      description: Requiere el permiso `products:manage` (MANAGER o ADMIN). El SKU se guarda en mayúsculas.
+      operationId: createProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+            example:
+              sku: "HER-9001"
+              name: "Taladro percutor 800W"
+              categoryId: "00000000-0000-0000-0000-000000000000"
+              unit: "unidad"
+              costPrice: 45.5
+              salePrice: 79.9
+              minStock: 5
+              maxStock: 40
+      responses:
+        "201":
+          description: Producto creado. `Location` apunta al recurso.
+          headers:
+            Location:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ProductDetail"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: SKU o código de barras ya existente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          $ref: "#/components/responses/BusinessRule"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /products/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Productos]
+      summary: Detalle de producto
+      operationId: getProduct
+      responses:
+        "200":
+          description: Producto con existencia por almacén.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ProductDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+    put:
+      tags: [Productos]
+      summary: Actualizar producto
+      description: Reemplaza los datos editables del producto. Requiere `products:manage`.
+      operationId: updateProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+      responses:
+        "200":
+          description: Producto actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ProductDetail"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: SKU o código de barras ya existente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          $ref: "#/components/responses/BusinessRule"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /stock:
+    get:
+      tags: [Stock]
+      summary: Existencias por producto y almacén
+      description: Por defecto omite las filas con existencia cero.
+      operationId: listStock
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: q
+          in: query
+          description: Busca por nombre o SKU del producto.
+          schema: { type: string, maxLength: 100 }
+        - name: productId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: warehouseId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: includeZero
+          in: query
+          schema: { type: string, enum: ["true", "false"], default: "false" }
+        - $ref: "#/components/parameters/Order"
+      responses:
+        "200":
+          description: Página de existencias.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/StockItem"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /movements:
+    get:
+      tags: [Movimientos]
+      summary: Listar movimientos
+      operationId: listMovements
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: q
+          in: query
+          description: Busca por producto, SKU, referencia o motivo.
+          schema: { type: string, maxLength: 100 }
+        - name: type
+          in: query
+          schema:
+            $ref: "#/components/schemas/MovementType"
+        - name: productId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: warehouseId
+          in: query
+          description: Movimientos con origen o destino en el almacén.
+          schema: { type: string, format: uuid }
+        - name: userId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: from
+          in: query
+          schema: { type: string, format: date, example: "2026-09-01" }
+        - name: to
+          in: query
+          schema: { type: string, format: date, example: "2026-09-30" }
+        - name: order
+          in: query
+          description: Orden por fecha (más recientes primero por defecto).
+          schema: { type: string, enum: [asc, desc], default: desc }
+      responses:
+        "200":
+          description: Página de movimientos.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Movement"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+    post:
+      tags: [Movimientos]
+      summary: Registrar movimiento
+      description: |
+        Aplica las mismas reglas que la aplicación: el stock nunca queda negativo, una
+        transferencia es atómica y una entrada con costo recalcula el costo promedio ponderado.
+
+        Convención de almacenes (`quantity` siempre > 0):
+
+        - `IN`: solo `toWarehouseId` y `unitCost` obligatorio.
+        - `OUT`: solo `fromWarehouseId`.
+        - `TRANSFER`: `fromWarehouseId` y `toWarehouseId` distintos.
+        - `ADJUSTMENT`: exactamente uno (`toWarehouseId` aumenta, `fromWarehouseId` disminuye).
+      operationId: createMovement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MovementInput"
+            examples:
+              entrada:
+                summary: Entrada con costo
+                value:
+                  type: IN
+                  productId: "00000000-0000-0000-0000-000000000000"
+                  toWarehouseId: "00000000-0000-0000-0000-000000000000"
+                  quantity: 10
+                  unitCost: 12.5
+                  reference: "FAC-0001"
+              transferencia:
+                summary: Transferencia entre almacenes
+                value:
+                  type: TRANSFER
+                  productId: "00000000-0000-0000-0000-000000000000"
+                  fromWarehouseId: "00000000-0000-0000-0000-000000000000"
+                  toWarehouseId: "00000000-0000-0000-0000-000000000001"
+                  quantity: 3
+      responses:
+        "201":
+          description: Movimiento registrado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MovementResult"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/BusinessRule"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: sp_<48 caracteres hexadecimales>
+      description: Clave de API generada por un administrador en Usuarios.
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: authjs.session-token
+      description: Cookie de sesión de la aplicación (solo desde el navegador).
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Order:
+      name: order
+      in: query
+      schema: { type: string, enum: [asc, desc], default: asc }
+  responses:
+    ValidationError:
+      description: Parámetros o cuerpo inválidos.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: VALIDATION_ERROR
+              message: Datos inválidos.
+              details:
+                - path: quantity
+                  message: "Too small: expected number to be >0"
+    Unauthorized:
+      description: Falta la clave de API o la sesión, o la clave fue revocada.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: UNAUTHORIZED
+              message: "Autenticación requerida: envía Authorization: Bearer <clave de API>."
+    Forbidden:
+      description: El rol no tiene el permiso necesario.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: El recurso no existe.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    BusinessRule:
+      description: La operación viola una regla de negocio (stock insuficiente, almacén inactivo...).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: BUSINESS_RULE
+              message: "Stock insuficiente en Almacén Central: hay 2 unidad y se intenta retirar 5."
+    RateLimited:
+      description: Se superó el límite de peticiones por minuto.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - BAD_REQUEST
+                - UNAUTHORIZED
+                - FORBIDDEN
+                - NOT_FOUND
+                - VALIDATION_ERROR
+                - BUSINESS_RULE
+                - CONFLICT
+                - RATE_LIMITED
+                - INTERNAL_ERROR
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  path: { type: string }
+                  message: { type: string }
+    PaginationMeta:
+      type: object
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        pageCount: { type: integer }
+    Principal:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        role:
+          $ref: "#/components/schemas/Role"
+        authenticatedVia: { type: string, enum: [api-key, session] }
+        permissions:
+          type: array
+          items: { type: string }
+    Role:
+      type: string
+      enum: [ADMIN, MANAGER, OPERATOR]
+    MovementType:
+      type: string
+      enum: [IN, OUT, ADJUSTMENT, TRANSFER]
+    Unit:
+      type: string
+      enum: [unidad, par, caja, paquete, rollo, litro, kg, metro]
+    ProductInput:
+      type: object
+      required: [sku, name, categoryId, costPrice, salePrice]
+      properties:
+        sku: { type: string, minLength: 3, maxLength: 40, pattern: "^[A-Za-z0-9-]+$" }
+        barcode: { type: string, maxLength: 50, pattern: "^[A-Za-z0-9-]*$" }
+        name: { type: string, minLength: 2, maxLength: 200 }
+        description: { type: string, maxLength: 1000 }
+        categoryId: { type: string, format: uuid }
+        supplierId:
+          { type: string, format: uuid, description: "Vacío o ausente para sin proveedor." }
+        unit:
+          $ref: "#/components/schemas/Unit"
+        costPrice: { type: number, minimum: 0 }
+        salePrice: { type: number, minimum: 0 }
+        minStock: { type: integer, minimum: 0, default: 0 }
+        maxStock: { type: [integer, "null"], minimum: 0 }
+        imageUrl: { type: string, format: uri, maxLength: 500 }
+    ProductSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        sku: { type: string }
+        barcode: { type: [string, "null"] }
+        name: { type: string }
+        unit: { type: string }
+        categoryName: { type: string }
+        supplierName: { type: [string, "null"] }
+        costPrice: { type: number }
+        salePrice: { type: number }
+        avgCost: { type: number, description: "Costo promedio ponderado." }
+        minStock: { type: integer }
+        maxStock: { type: [integer, "null"] }
+        totalStock: { type: integer }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    ProductDetail:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        sku: { type: string }
+        barcode: { type: [string, "null"] }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        unit: { type: string }
+        imageUrl: { type: [string, "null"] }
+        category:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            isActive: { type: boolean }
+        supplier:
+          type: [object, "null"]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            isActive: { type: boolean }
+        costPrice: { type: number }
+        salePrice: { type: number }
+        avgCost: { type: number }
+        minStock: { type: integer }
+        maxStock: { type: [integer, "null"] }
+        isActive: { type: boolean }
+        totalStock: { type: integer }
+        stocks:
+          type: array
+          items:
+            type: object
+            properties:
+              warehouseId: { type: string, format: uuid }
+              warehouseCode: { type: string }
+              warehouseName: { type: string }
+              quantity: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    StockItem:
+      type: object
+      properties:
+        productId: { type: string, format: uuid }
+        sku: { type: string }
+        productName: { type: string }
+        unit: { type: string }
+        minStock: { type: integer }
+        warehouseId: { type: string, format: uuid }
+        warehouseCode: { type: string }
+        warehouseName: { type: string }
+        quantity: { type: integer }
+        updatedAt: { type: string, format: date-time }
+    Movement:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type:
+          $ref: "#/components/schemas/MovementType"
+        productId: { type: string, format: uuid }
+        productName: { type: string }
+        sku: { type: string }
+        unit: { type: string }
+        fromWarehouse: { type: [string, "null"], description: "Código del almacén de origen." }
+        toWarehouse: { type: [string, "null"], description: "Código del almacén de destino." }
+        quantity: { type: integer }
+        unitCost: { type: [number, "null"] }
+        reason: { type: [string, "null"] }
+        reference: { type: [string, "null"] }
+        userName: { type: string }
+        createdAt: { type: string, format: date-time }
+    MovementInput:
+      type: object
+      required: [type, productId, quantity]
+      additionalProperties: false
+      properties:
+        type:
+          $ref: "#/components/schemas/MovementType"
+        productId: { type: string, format: uuid }
+        fromWarehouseId: { type: [string, "null"], format: uuid }
+        toWarehouseId: { type: [string, "null"], format: uuid }
+        quantity: { type: integer, minimum: 1 }
+        unitCost:
+          {
+            type: [number, "null"],
+            minimum: 0,
+            description: "Obligatorio en IN; se ignora en el resto.",
+          }
+        reason: { type: [string, "null"], maxLength: 255 }
+        reference: { type: [string, "null"], maxLength: 60, pattern: "^[A-Za-z0-9\\-/. ]*$" }
+    MovementResult:
+      type: object
+      properties:
+        movementId: { type: string, format: uuid }
+        productId: { type: string, format: uuid }
+        newAverageCost: { type: [number, "null"] }
+        balances:
+          type: array
+          items:
+            type: object
+            properties:
+              warehouseId: { type: string, format: uuid }
+              quantity: { type: integer }
